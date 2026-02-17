@@ -697,6 +697,7 @@ class R2IndexClient:
         transfer_config: R2TransferConfig | None = None,
         user_agent: str | None = None,
         verify_checksum: bool = False,
+        checksum_retries: int = 2,
     ) -> tuple[Path, FileRecord | None]:
         """
         Download a file from R2 and record the download in the index.
@@ -704,7 +705,7 @@ class R2IndexClient:
         This is a convenience method that performs:
         1. Download the file from R2
         2. Fetch file record from the index (non-fatal if not found)
-        3. Optionally verify file integrity using checksums
+        3. Optionally verify file integrity using checksums (with retries)
         4. Record the download in the index for analytics
 
         Args:
@@ -720,6 +721,8 @@ class R2IndexClient:
             transfer_config: Optional transfer configuration for multipart/threading.
             verify_checksum: If True, verify file integrity after download using
                 SHA-256 checksum from the file record.
+            checksum_retries: Number of additional download attempts if checksum
+                verification fails. Defaults to 2.
             overwrite: If False, skip download when destination file already
                 exists. Defaults to True.
 
@@ -729,7 +732,7 @@ class R2IndexClient:
         Raises:
             R2IndexError: If R2 config is not provided.
             DownloadError: If download fails.
-            ChecksumVerificationError: If checksum verification fails.
+            ChecksumVerificationError: If checksum verification fails after all retries.
         """
         storage = self._get_storage()
 
@@ -768,19 +771,39 @@ class R2IndexClient:
             )
             return downloaded_path, None
 
-        # Step 3: Verify checksum if requested
+        # Step 3: Verify checksum if requested, retrying the download on mismatch
         if verify_checksum:
             expected_checksum = file_record.checksum_sha256
             if expected_checksum:
-                logger.info("Verifying SHA-256 checksum for %s", source_filename)
-                actual_checksums = compute_checksums(downloaded_path)
-                if actual_checksums.sha256 != expected_checksum:
-                    raise ChecksumVerificationError(
-                        f"SHA-256 checksum mismatch for {source_filename}",
-                        expected=expected_checksum,
-                        actual=actual_checksums.sha256,
+                for attempt in range(checksum_retries + 1):
+                    if attempt > 0:
+                        logger.warning(
+                            "Checksum mismatch for %s on attempt %d/%d, re-downloading...",
+                            source_filename, attempt, checksum_retries + 1,
+                        )
+                        downloaded_path = storage.download_file(
+                            bucket,
+                            object_key,
+                            destination,
+                            progress_callback=progress_callback,
+                            transfer_config=transfer_config,
+                            progress_interval=progress_interval,
+                            overwrite=True,
+                        )
+                    logger.info(
+                        "Verifying SHA-256 checksum for %s (attempt %d/%d)",
+                        source_filename, attempt + 1, checksum_retries + 1,
                     )
-                logger.info("Checksum verified for %s", source_filename)
+                    actual_checksums = compute_checksums(downloaded_path)
+                    if actual_checksums.sha256 == expected_checksum:
+                        logger.info("Checksum verified for %s", source_filename)
+                        break
+                    if attempt == checksum_retries:
+                        raise ChecksumVerificationError(
+                            f"SHA-256 checksum mismatch for {source_filename} after {checksum_retries + 1} attempt(s)",
+                            expected=expected_checksum,
+                            actual=actual_checksums.sha256,
+                        )
 
         # Step 4: Record the download
         if ip_address is None:
