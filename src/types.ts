@@ -42,6 +42,8 @@ export interface CreateFileInput {
   checksum_sha1?: string;
   checksum_sha256?: string;
   checksum_sha512?: string;
+  deprecated?: boolean;
+  deprecation_reason?: string;
   entity: string;
   extension: string;
   extra?: Record<string, unknown>;

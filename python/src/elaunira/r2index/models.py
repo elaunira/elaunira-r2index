@@ -34,6 +34,8 @@ class FileCreateRequest(BaseModel):
     checksum_sha1: str | None = None
     checksum_sha256: str | None = None
     checksum_sha512: str | None = None
+    deprecated: bool | None = None
+    deprecation_reason: str | None = None
 
 
 class FileUpdateRequest(BaseModel):

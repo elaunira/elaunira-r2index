@@ -503,6 +503,8 @@ class AsyncR2IndexClient:
         destination_version: str,
         content_type: str | None = None,
         create_checksum_files: bool = False,
+        deprecated: bool | None = None,
+        deprecation_reason: str | None = None,
         extension: str | None = None,
         extra: dict[str, Any] | None = None,
         media_type: str | None = None,
@@ -623,6 +625,8 @@ class AsyncR2IndexClient:
             checksum_sha1=checksums.sha1,
             checksum_sha256=checksums.sha256,
             checksum_sha512=checksums.sha512,
+            deprecated=deprecated,
+            deprecation_reason=deprecation_reason,
         )
 
         result = await self.create(create_request)

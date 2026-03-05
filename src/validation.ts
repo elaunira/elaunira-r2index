@@ -11,6 +11,8 @@ export const createFileSchema = z.object({
   checksum_sha1: z.string().length(40).regex(/^[a-f0-9]+$/i).optional(),
   checksum_sha256: z.string().length(64).regex(/^[a-f0-9]+$/i).optional(),
   checksum_sha512: z.string().length(128).regex(/^[a-f0-9]+$/i).optional(),
+  deprecated: z.boolean().optional(),
+  deprecation_reason: z.string().max(500).optional(),
   entity: z.string().min(1).max(100),
   extension: z.string().min(1).max(50),
   extra: z.record(z.string(), z.unknown()).optional(),

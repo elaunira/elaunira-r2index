@@ -160,8 +160,8 @@ export async function createFile(db: D1Database, input: CreateFileInput): Promis
   const now = Date.now();
 
   await db.prepare(`
-    INSERT INTO files (id, name, bucket, category, entity, extension, media_type, remote_path, remote_filename, remote_version, metadata_path, size, checksum_md5, checksum_sha1, checksum_sha256, checksum_sha512, extra, created, updated)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO files (id, name, bucket, category, entity, extension, media_type, remote_path, remote_filename, remote_version, metadata_path, size, checksum_md5, checksum_sha1, checksum_sha256, checksum_sha512, extra, deprecated, deprecation_reason, created, updated)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id,
     input.name ?? null,
@@ -180,6 +180,8 @@ export async function createFile(db: D1Database, input: CreateFileInput): Promis
     input.checksum_sha256 ?? null,
     input.checksum_sha512 ?? null,
     input.extra ? JSON.stringify(input.extra) : null,
+    input.deprecated ? 1 : 0,
+    input.deprecation_reason ?? null,
     now,
     now
   ).run();
@@ -272,7 +274,8 @@ export async function upsertFile(db: D1Database, input: CreateFileInput): Promis
     await db.prepare(`
       UPDATE files SET
         name = ?, category = ?, entity = ?, extension = ?, media_type = ?, metadata_path = ?, size = ?,
-        checksum_md5 = ?, checksum_sha1 = ?, checksum_sha256 = ?, checksum_sha512 = ?, extra = ?, updated = ?
+        checksum_md5 = ?, checksum_sha1 = ?, checksum_sha256 = ?, checksum_sha512 = ?, extra = ?,
+        deprecated = ?, deprecation_reason = ?, updated = ?
       WHERE id = ?
     `).bind(
       input.name ?? null,
@@ -287,6 +290,8 @@ export async function upsertFile(db: D1Database, input: CreateFileInput): Promis
       input.checksum_sha256 ?? null,
       input.checksum_sha512 ?? null,
       input.extra ? JSON.stringify(input.extra) : null,
+      input.deprecated ? 1 : 0,
+      input.deprecation_reason ?? null,
       now,
       existing.id
     ).run();
