@@ -5,6 +5,7 @@ import { readAuthMiddleware, writeAuthMiddleware } from './middleware/auth';
 import { d1SessionMiddleware } from './middleware/d1-session';
 import { requestIdMiddleware } from './middleware/request-id';
 import filesRoutes from './routes/files';
+import downloadRoute from './routes/download';
 import downloadsRoutes from './routes/downloads';
 import analyticsRoutes from './routes/analytics';
 import { cleanupOldDownloads } from './db/downloads';
@@ -54,6 +55,7 @@ app.use('/*', d1SessionMiddleware);
 
 // Mount routes
 app.route('/files', filesRoutes);
+app.route('/download', downloadRoute);
 app.route('/downloads', downloadsRoutes);
 app.route('/analytics', analyticsRoutes);
 

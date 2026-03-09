@@ -12,6 +12,13 @@
       "database_id": "<YOUR_D1_DATABASE_ID>"
     }
   ],
+  // Configure your R2 bucket: update bucket_name below
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "r2index-e2e-tests"
+    }
+  ],
   "observability": {
     "enabled": false,
     "head_sampling_rate": 1,

@@ -64,6 +64,11 @@ export const Errors = {
     'The requested file was not found.',
     'Verify the file ID or remote tuple exists.'
   ),
+  R2_OBJECT_NOT_FOUND: e(
+    'R2_OBJECT_NOT_FOUND',
+    'The file object was not found in storage.',
+    'The file metadata exists but the object is missing from R2.'
+  ),
   MISSING_REMOTE_TUPLE: e(
     'MISSING_REMOTE_TUPLE',
     'Missing required fields for delete operation.',
