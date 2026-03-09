@@ -282,6 +282,13 @@ describe('GET /files - Search files', () => {
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
   });
 
+  it('disables cache with cache=false query parameter', async () => {
+    const response = await SELF.fetch('http://localhost/files?cache=false', {
+      headers: createAuthHeaders(),
+    });
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
+  });
+
   it('filters by category', async () => {
     const response = await SELF.fetch('http://localhost/files?category=documents', {
       headers: createAuthHeaders(),
@@ -618,6 +625,13 @@ describe('GET /files/index - Nested index', () => {
       headers: createAuthHeaders(),
     });
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
+  });
+
+  it('disables cache with cache=false query parameter', async () => {
+    const response = await SELF.fetch('http://localhost/files/index?cache=false', {
+      headers: createAuthHeaders(),
+    });
+    expect(response.headers.get('Cache-Control')).toBe('no-store');
   });
 
   it('filters index by entity', async () => {

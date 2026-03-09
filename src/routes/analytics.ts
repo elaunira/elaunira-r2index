@@ -21,8 +21,13 @@ function getAnalyticsParams(c: Context) {
   };
 }
 
-function getCacheMaxAge(c: Context<{ Bindings: Env; Variables: Variables }>): number {
-  return parseInt(c.env.CACHE_MAX_AGE || '60', 10);
+function setCacheHeaders(c: Context<{ Bindings: Env; Variables: Variables }>): void {
+  const globalMaxAge = parseInt(c.env.CACHE_MAX_AGE || '60', 10);
+  if (globalMaxAge < 0 || c.req.query('cache') === 'false') {
+    c.header('Cache-Control', 'no-store');
+    return;
+  }
+  c.header('Cache-Control', `public, max-age=${globalMaxAge}`);
 }
 
 // Get time series data
@@ -45,7 +50,7 @@ app.get('/timeseries', async (c) => {
     filesLimit
   );
 
-  c.header('Cache-Control', `public, max-age=${getCacheMaxAge(c)}`);
+  setCacheHeaders(c);
   return c.json({
     buckets: data,
     period: { start: parseInt(start, 10), end: parseInt(end, 10) },
@@ -70,7 +75,7 @@ app.get('/summary', async (c) => {
     { bucket, remote_path, remote_filename, remote_version }
   );
 
-  c.header('Cache-Control', `public, max-age=${getCacheMaxAge(c)}`);
+  setCacheHeaders(c);
   return c.json(summary);
 });
 
@@ -98,7 +103,7 @@ app.get('/by-ip', async (c) => {
     parseInt(offset || '0', 10)
   );
 
-  c.header('Cache-Control', `public, max-age=${getCacheMaxAge(c)}`);
+  setCacheHeaders(c);
   return c.json(result);
 });
 
@@ -120,7 +125,7 @@ app.get('/user-agents', async (c) => {
     Math.min(parseInt(limit || '20', 10), 100)
   );
 
-  c.header('Cache-Control', `public, max-age=${getCacheMaxAge(c)}`);
+  setCacheHeaders(c);
   return c.json({
     user_agents: data,
     period: { start: parseInt(start, 10), end: parseInt(end, 10) },

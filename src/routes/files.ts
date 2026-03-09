@@ -39,8 +39,13 @@ function getFilterParams(c: Context): SearchParams {
   };
 }
 
-function getCacheMaxAge(c: Context<{ Bindings: Env; Variables: Variables }>): number {
-  return parseInt(c.env.CACHE_MAX_AGE || '60', 10);
+function setCacheHeaders(c: Context<{ Bindings: Env; Variables: Variables }>): void {
+  const globalMaxAge = parseInt(c.env.CACHE_MAX_AGE || '60', 10);
+  if (globalMaxAge < 0 || c.req.query('cache') === 'false') {
+    c.header('Cache-Control', 'no-store');
+    return;
+  }
+  c.header('Cache-Control', `public, max-age=${globalMaxAge}`);
 }
 
 // ============================================================================
@@ -58,7 +63,7 @@ app.get('/', async (c) => {
 
   try {
     const result = await searchFiles(c.get('db'), parsed.data);
-    c.header('Cache-Control', `public, max-age=${getCacheMaxAge(c)}`);
+    setCacheHeaders(c);
     return c.json(result);
   } catch (e) {
     if (e instanceof Error && e.message.includes('Invalid group_by')) {
@@ -110,7 +115,7 @@ app.get('/index', async (c) => {
   const params = getFilterParams(c);
   const index = await getNestedIndex(c.get('db'), params);
 
-  c.header('Cache-Control', `public, max-age=${getCacheMaxAge(c)}`);
+  setCacheHeaders(c);
   return c.json(index);
 });
 
