@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import type { Env, Variables } from './types';
-import { authMiddleware } from './middleware/auth';
+import { readAuthMiddleware, writeAuthMiddleware } from './middleware/auth';
 import { d1SessionMiddleware } from './middleware/d1-session';
 import { requestIdMiddleware } from './middleware/request-id';
 import filesRoutes from './routes/files';
@@ -43,8 +43,11 @@ app.use('*', cors({
 // Health check (no auth required)
 app.get('/health', (c) => c.json({ status: 'ok' }));
 
-// Apply auth middleware to all other routes
-app.use('/*', authMiddleware);
+// Read auth for GET requests (public if R2INDEX_READ_TOKEN is not set)
+app.on('GET', '/*', readAuthMiddleware);
+
+// Write auth for mutating requests (always requires R2INDEX_WRITE_TOKEN)
+app.on(['POST', 'PUT', 'DELETE'], '/*', writeAuthMiddleware);
 
 // D1 session middleware (after auth, before routes)
 app.use('/*', d1SessionMiddleware);

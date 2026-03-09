@@ -2,12 +2,21 @@ import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { setupDatabase } from './setup';
 
-const API_TOKEN = 'test-token';
+const READ_TOKEN = 'test-read-token';
+const WRITE_TOKEN = 'test-write-token';
 
-const createAuthHeaders = () => ({
-  Authorization: `Bearer ${API_TOKEN}`,
+const createReadHeaders = () => ({
+  Authorization: `Bearer ${READ_TOKEN}`,
   'Content-Type': 'application/json',
 });
+
+const createWriteHeaders = () => ({
+  Authorization: `Bearer ${WRITE_TOKEN}`,
+  'Content-Type': 'application/json',
+});
+
+// Write headers used for setup (creating test data) and write operations
+const createAuthHeaders = createWriteHeaders;
 
 const validDownloadInput = {
   bucket: 'test-bucket',

@@ -2,16 +2,25 @@ import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { env, SELF } from 'cloudflare:test';
 import { setupDatabase } from './setup';
 
-const API_TOKEN = 'test-token';
+const READ_TOKEN = 'test-read-token';
+const WRITE_TOKEN = 'test-write-token';
 
 beforeAll(async () => {
   await setupDatabase();
 });
 
-const createAuthHeaders = () => ({
-  Authorization: `Bearer ${API_TOKEN}`,
+const createReadHeaders = () => ({
+  Authorization: `Bearer ${READ_TOKEN}`,
   'Content-Type': 'application/json',
 });
+
+const createWriteHeaders = () => ({
+  Authorization: `Bearer ${WRITE_TOKEN}`,
+  'Content-Type': 'application/json',
+});
+
+// Write headers used for setup (creating test data) and write operations
+const createAuthHeaders = createWriteHeaders;
 
 const validFileInput = {
   bucket: 'test-bucket',
@@ -46,24 +55,8 @@ describe('Health endpoint', () => {
   });
 });
 
-describe('Authentication', () => {
-  it('rejects requests without Authorization header', async () => {
-    const response = await SELF.fetch('http://localhost/files');
-    expect(response.status).toBe(401);
-    const data = await response.json() as { error: { code: string } };
-    expect(data.error.code).toBe('MISSING_AUTH_HEADER');
-  });
-
-  it('rejects requests with invalid auth format', async () => {
-    const response = await SELF.fetch('http://localhost/files', {
-      headers: { Authorization: 'Basic abc123' },
-    });
-    expect(response.status).toBe(401);
-    const data = await response.json() as { error: { code: string } };
-    expect(data.error.code).toBe('INVALID_AUTH_FORMAT');
-  });
-
-  it('rejects requests with invalid token', async () => {
+describe('Authentication - Read', () => {
+  it('rejects read requests with invalid token', async () => {
     const response = await SELF.fetch('http://localhost/files', {
       headers: { Authorization: 'Bearer wrong-token' },
     });
@@ -72,11 +65,64 @@ describe('Authentication', () => {
     expect(data.error.code).toBe('INVALID_TOKEN');
   });
 
-  it('accepts requests with valid token', async () => {
+  it('accepts read requests with valid read token', async () => {
     const response = await SELF.fetch('http://localhost/files', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.status).toBe(200);
+  });
+});
+
+describe('Authentication - Write', () => {
+  it('rejects write requests without Authorization header', async () => {
+    const response = await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(validFileInput),
+    });
+    expect(response.status).toBe(401);
+    const data = await response.json() as { error: { code: string } };
+    expect(data.error.code).toBe('MISSING_AUTH_HEADER');
+  });
+
+  it('rejects write requests with invalid auth format', async () => {
+    const response = await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: { Authorization: 'Basic abc123', 'Content-Type': 'application/json' },
+      body: JSON.stringify(validFileInput),
+    });
+    expect(response.status).toBe(401);
+    const data = await response.json() as { error: { code: string } };
+    expect(data.error.code).toBe('INVALID_AUTH_FORMAT');
+  });
+
+  it('rejects write requests with invalid token', async () => {
+    const response = await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer wrong-token', 'Content-Type': 'application/json' },
+      body: JSON.stringify(validFileInput),
+    });
+    expect(response.status).toBe(403);
+    const data = await response.json() as { error: { code: string } };
+    expect(data.error.code).toBe('INVALID_TOKEN');
+  });
+
+  it('rejects write requests with read token', async () => {
+    const response = await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: createReadHeaders(),
+      body: JSON.stringify(validFileInput),
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it('accepts write requests with valid write token', async () => {
+    const response = await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: createWriteHeaders(),
+      body: JSON.stringify(validFileInput),
+    });
+    expect(response.status).toBe(201);
   });
 });
 
@@ -214,7 +260,7 @@ describe('POST /files - Create file without version', () => {
 
     const response = await SELF.fetch(
       `http://localhost/files/by-tuple?bucket=${validFileInput.bucket}&remote_path=${encodeURIComponent(validFileInput.remote_path)}&remote_filename=${validFileInput.remote_filename}`,
-      { headers: createAuthHeaders() }
+      { headers: createReadHeaders() }
     );
     expect(response.status).toBe(200);
     const data = await response.json() as { remote_version: string | null };
@@ -267,7 +313,7 @@ describe('GET /files - Search files', () => {
 
   it('returns all files when no filters', async () => {
     const response = await SELF.fetch('http://localhost/files', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.status).toBe(200);
     const data = await response.json() as { files: unknown[]; total: number };
@@ -277,21 +323,21 @@ describe('GET /files - Search files', () => {
 
   it('includes Cache-Control header', async () => {
     const response = await SELF.fetch('http://localhost/files', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
   });
 
   it('disables cache with cache=false query parameter', async () => {
     const response = await SELF.fetch('http://localhost/files?cache=false', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.headers.get('Cache-Control')).toBe('no-store');
   });
 
   it('filters by category', async () => {
     const response = await SELF.fetch('http://localhost/files?category=documents', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { files: unknown[]; total: number };
     expect(data.total).toBe(2);
@@ -299,7 +345,7 @@ describe('GET /files - Search files', () => {
 
   it('filters by entity', async () => {
     const response = await SELF.fetch('http://localhost/files?entity=user-2', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { files: unknown[]; total: number };
     expect(data.total).toBe(1);
@@ -307,7 +353,7 @@ describe('GET /files - Search files', () => {
 
   it('filters by extension', async () => {
     const response = await SELF.fetch('http://localhost/files?extension=pdf', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { files: unknown[]; total: number };
     expect(data.total).toBe(1);
@@ -315,7 +361,7 @@ describe('GET /files - Search files', () => {
 
   it('supports pagination with limit', async () => {
     const response = await SELF.fetch('http://localhost/files?limit=2', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { files: unknown[]; total: number };
     expect(data.total).toBe(3);
@@ -324,7 +370,7 @@ describe('GET /files - Search files', () => {
 
   it('supports pagination with offset', async () => {
     const response = await SELF.fetch('http://localhost/files?limit=2&offset=2', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { files: unknown[]; total: number };
     expect(data.total).toBe(3);
@@ -333,7 +379,7 @@ describe('GET /files - Search files', () => {
 
   it('groups by category', async () => {
     const response = await SELF.fetch('http://localhost/files?group_by=category', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { groups: { value: string; count: number }[]; total: number };
     expect(data.total).toBe(3);
@@ -344,7 +390,7 @@ describe('GET /files - Search files', () => {
 
   it('rejects invalid group_by value', async () => {
     const response = await SELF.fetch('http://localhost/files?group_by=invalid', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.status).toBe(400);
   });
@@ -368,7 +414,7 @@ describe('GET /files/:id - Get file by ID', () => {
 
   it('returns file by ID', async () => {
     const response = await SELF.fetch(`http://localhost/files/${fileId}`, {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.status).toBe(200);
     const data = await response.json() as { id: string; category: string; tags: string[] };
@@ -379,7 +425,7 @@ describe('GET /files/:id - Get file by ID', () => {
 
   it('returns 404 for non-existent file', async () => {
     const response = await SELF.fetch('http://localhost/files/non-existent-id', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.status).toBe(404);
     const data = await response.json() as { error: { code: string } };
@@ -510,7 +556,7 @@ describe('DELETE /files/:id - Delete file by ID', () => {
 
     // Verify file is deleted
     const getResponse = await SELF.fetch(`http://localhost/files/${fileId}`, {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(getResponse.status).toBe(404);
   });
@@ -598,7 +644,7 @@ describe('GET /files/index - Nested index', () => {
 
   it('returns nested index grouped by entity then extension', async () => {
     const response = await SELF.fetch('http://localhost/files/index', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.status).toBe(200);
     const data = await response.json() as { index: Record<string, Record<string, { name?: string; file_size?: string }>>; total: number };
@@ -613,7 +659,7 @@ describe('GET /files/index - Nested index', () => {
 
   it('includes file metadata in index entries', async () => {
     const response = await SELF.fetch('http://localhost/files/index', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { index: Record<string, Record<string, { name?: string; file_size?: string }>> };
 
@@ -623,21 +669,21 @@ describe('GET /files/index - Nested index', () => {
 
   it('includes Cache-Control header', async () => {
     const response = await SELF.fetch('http://localhost/files/index', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=60');
   });
 
   it('disables cache with cache=false query parameter', async () => {
     const response = await SELF.fetch('http://localhost/files/index?cache=false', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.headers.get('Cache-Control')).toBe('no-store');
   });
 
   it('filters index by entity', async () => {
     const response = await SELF.fetch('http://localhost/files/index?entity=user-1', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { index: Record<string, Record<string, unknown>>; total: number };
 
@@ -668,7 +714,7 @@ describe('Tag filtering', () => {
 
   it('filters by single tag', async () => {
     const response = await SELF.fetch('http://localhost/files?tags=tag-a', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { total: number };
     expect(data.total).toBe(2);
@@ -676,7 +722,7 @@ describe('Tag filtering', () => {
 
   it('filters by multiple tags (AND logic)', async () => {
     const response = await SELF.fetch('http://localhost/files?tags=tag-a,tag-b', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { total: number };
     expect(data.total).toBe(1);
@@ -684,7 +730,7 @@ describe('Tag filtering', () => {
 
   it('returns empty when no files match all tags', async () => {
     const response = await SELF.fetch('http://localhost/files?tags=tag-a,tag-b,tag-c', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     const data = await response.json() as { total: number };
     expect(data.total).toBe(0);
@@ -709,7 +755,7 @@ describe('D1 session middleware', () => {
 
   it('returns X-D1-Bookmark header after a read', async () => {
     const response = await SELF.fetch('http://localhost/files', {
-      headers: createAuthHeaders(),
+      headers: createReadHeaders(),
     });
     expect(response.status).toBe(200);
     expect(response.headers.get('X-D1-Bookmark')).toBeTruthy();
@@ -728,7 +774,7 @@ describe('D1 session middleware', () => {
     // Use the bookmark in a subsequent read
     const readResponse = await SELF.fetch('http://localhost/files', {
       headers: {
-        ...createAuthHeaders(),
+        ...createReadHeaders(),
         'X-D1-Bookmark': bookmark!,
       },
     });
