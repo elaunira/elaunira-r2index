@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS files (
     checksum_sha512 TEXT,
     extra TEXT,
     deprecated INTEGER DEFAULT 0,
-    deprecation_reason TEXT DEFAULT '',
+    deprecation_reason TEXT,
     created INTEGER NOT NULL,
     updated INTEGER NOT NULL
 );
@@ -64,6 +64,11 @@ CREATE INDEX IF NOT EXISTS idx_downloads_month ON file_downloads(month_bucket);
 CREATE INDEX IF NOT EXISTS idx_downloads_day_file ON file_downloads(day_bucket, bucket, remote_path, remote_filename, remote_version);
 CREATE INDEX IF NOT EXISTS idx_downloads_hour_file ON file_downloads(hour_bucket, bucket, remote_path, remote_filename, remote_version);
 CREATE INDEX IF NOT EXISTS idx_downloads_month_file ON file_downloads(month_bucket, bucket, remote_path, remote_filename, remote_version);
+
+-- Per-file lookup indexes (remote tuple first, then time bucket for range scan)
+CREATE INDEX IF NOT EXISTS idx_downloads_file_day ON file_downloads(bucket, remote_path, remote_filename, remote_version, day_bucket);
+CREATE INDEX IF NOT EXISTS idx_downloads_file_hour ON file_downloads(bucket, remote_path, remote_filename, remote_version, hour_bucket);
+CREATE INDEX IF NOT EXISTS idx_downloads_file_month ON file_downloads(bucket, remote_path, remote_filename, remote_version, month_bucket);
 
 -- IP search index
 CREATE INDEX IF NOT EXISTS idx_downloads_ip_day ON file_downloads(ip_address, day_bucket);

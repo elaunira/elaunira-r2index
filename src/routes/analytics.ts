@@ -1,7 +1,7 @@
 import { Context, Hono } from 'hono';
 import type { AnalyticsScale, Env, Variables } from '../types';
-import { getTimeSeries, getSummary, getDownloadsByIp, getUserAgentStats } from '../db/downloads';
-import { validationError } from '../errors';
+import { getTimeSeries, getSummary, getDownloadsByIp, getUserAgentStats, getTopFiles, getFileDownloadCounts } from '../db/downloads';
+import { Errors, validationError } from '../errors';
 import { analyticsParamsSchema } from '../validation';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
@@ -15,6 +15,10 @@ function getAnalyticsParams(c: Context) {
     remote_path: c.req.query('remote_path'),
     remote_filename: c.req.query('remote_filename'),
     remote_version: c.req.query('remote_version'),
+    category: c.req.query('category'),
+    subcategory: c.req.query('subcategory'),
+    entity: c.req.query('entity'),
+    tags: c.req.query('tags'),
     ip: c.req.query('ip'),
     limit: c.req.query('limit'),
     offset: c.req.query('offset'),
@@ -39,14 +43,14 @@ app.get('/timeseries', async (c) => {
     return c.json(validationError(parsed.error.flatten().fieldErrors), 400);
   }
 
-  const { start, end, scale, bucket, remote_path, remote_filename, remote_version, limit } = parsed.data;
+  const { start, end, scale, bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags, limit } = parsed.data;
   const filesLimit = Math.min(parseInt(limit || '100', 10), 1000);
   const data = await getTimeSeries(
     c.get('db'),
     parseInt(start, 10),
     parseInt(end, 10),
     (scale || 'day') as AnalyticsScale,
-    { bucket, remote_path, remote_filename, remote_version },
+    { bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags },
     filesLimit
   );
 
@@ -67,12 +71,12 @@ app.get('/summary', async (c) => {
     return c.json(validationError(parsed.error.flatten().fieldErrors), 400);
   }
 
-  const { start, end, bucket, remote_path, remote_filename, remote_version } = parsed.data;
+  const { start, end, bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags } = parsed.data;
   const summary = await getSummary(
     c.get('db'),
     parseInt(start, 10),
     parseInt(end, 10),
-    { bucket, remote_path, remote_filename, remote_version }
+    { bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags }
   );
 
   setCacheHeaders(c);
@@ -116,12 +120,12 @@ app.get('/user-agents', async (c) => {
     return c.json(validationError(parsed.error.flatten().fieldErrors), 400);
   }
 
-  const { start, end, bucket, remote_path, remote_filename, remote_version, limit } = parsed.data;
+  const { start, end, bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags, limit } = parsed.data;
   const data = await getUserAgentStats(
     c.get('db'),
     parseInt(start, 10),
     parseInt(end, 10),
-    { bucket, remote_path, remote_filename, remote_version },
+    { bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags },
     Math.min(parseInt(limit || '20', 10), 100)
   );
 
@@ -130,6 +134,73 @@ app.get('/user-agents', async (c) => {
     user_agents: data,
     period: { start: parseInt(start, 10), end: parseInt(end, 10) },
   });
+});
+
+// Get top files by downloads
+app.get('/top-files', async (c) => {
+  const params = getAnalyticsParams(c);
+  const parsed = analyticsParamsSchema.safeParse(params);
+
+  if (!parsed.success) {
+    return c.json(validationError(parsed.error.flatten().fieldErrors), 400);
+  }
+
+  const sortBy = c.req.query('sort_by') || 'downloads';
+  if (sortBy !== 'downloads' && sortBy !== 'unique_downloads') {
+    return c.json(validationError({ sort_by: ['sort_by must be downloads or unique_downloads'] }), 400);
+  }
+
+  const { start, end, bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags, limit, offset } = parsed.data;
+
+  const result = await getTopFiles(
+    c.get('db'),
+    parseInt(start, 10),
+    parseInt(end, 10),
+    { bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags },
+    sortBy,
+    Math.min(parseInt(limit || '100', 10), 1000),
+    parseInt(offset || '0', 10)
+  );
+
+  setCacheHeaders(c);
+  return c.json(result);
+});
+
+// Get download counts for a single file
+app.get('/file/:id/downloads', async (c) => {
+  const start = c.req.query('start');
+  const end = c.req.query('end');
+  const scale = c.req.query('scale') || 'day';
+
+  if (!start || !end || !/^\d+$/.test(start) || !/^\d+$/.test(end)) {
+    return c.json(validationError({ start: ['start and end are required (unix ms timestamps)'] }), 400);
+  }
+
+  if (!['hour', 'day', 'month'].includes(scale)) {
+    return c.json(validationError({ scale: ['scale must be hour, day, or month'] }), 400);
+  }
+
+  const startNum = parseInt(start, 10);
+  const endNum = parseInt(end, 10);
+
+  if (startNum > endNum) {
+    return c.json(validationError({ start: ['start must be less than or equal to end'] }), 400);
+  }
+
+  const result = await getFileDownloadCounts(
+    c.get('db'),
+    c.req.param('id'),
+    startNum,
+    endNum,
+    scale as AnalyticsScale
+  );
+
+  if (!result) {
+    return c.json(Errors.FILE_NOT_FOUND, 404);
+  }
+
+  setCacheHeaders(c);
+  return c.json(result);
 });
 
 export default app;

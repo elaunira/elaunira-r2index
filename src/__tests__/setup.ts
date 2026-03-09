@@ -24,7 +24,7 @@ export async function setupDatabase() {
         checksum_sha512 TEXT,
         extra TEXT,
         deprecated INTEGER DEFAULT 0,
-        deprecation_reason TEXT DEFAULT '',
+        deprecation_reason TEXT,
         created INTEGER NOT NULL,
         updated INTEGER NOT NULL
       )
@@ -60,6 +60,9 @@ export async function setupDatabase() {
     env.D1.prepare('CREATE INDEX IF NOT EXISTS idx_downloads_day_file ON file_downloads(day_bucket, bucket, remote_path, remote_filename, remote_version)'),
     env.D1.prepare('CREATE INDEX IF NOT EXISTS idx_downloads_hour_file ON file_downloads(hour_bucket, bucket, remote_path, remote_filename, remote_version)'),
     env.D1.prepare('CREATE INDEX IF NOT EXISTS idx_downloads_month_file ON file_downloads(month_bucket, bucket, remote_path, remote_filename, remote_version)'),
+    env.D1.prepare('CREATE INDEX IF NOT EXISTS idx_downloads_file_day ON file_downloads(bucket, remote_path, remote_filename, remote_version, day_bucket)'),
+    env.D1.prepare('CREATE INDEX IF NOT EXISTS idx_downloads_file_hour ON file_downloads(bucket, remote_path, remote_filename, remote_version, hour_bucket)'),
+    env.D1.prepare('CREATE INDEX IF NOT EXISTS idx_downloads_file_month ON file_downloads(bucket, remote_path, remote_filename, remote_version, month_bucket)'),
     env.D1.prepare('CREATE INDEX IF NOT EXISTS idx_downloads_ip_day ON file_downloads(ip_address, day_bucket)'),
   ]);
 }

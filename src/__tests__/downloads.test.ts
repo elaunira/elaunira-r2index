@@ -748,6 +748,387 @@ describe('Analytics - files limit', () => {
   });
 });
 
+describe('GET /analytics/file/:id/downloads', () => {
+  beforeEach(async () => {
+    await env.D1.prepare('DELETE FROM file_downloads').run();
+    await env.D1.prepare('DELETE FROM file_tags').run();
+    await env.D1.prepare('DELETE FROM files').run();
+  });
+
+  it('returns download counts for a file by day', async () => {
+    // Create a file
+    const fileResponse = await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({
+        bucket: 'test-bucket',
+        category: 'geo',
+        entity: 'france',
+        extension: 'geojson',
+        media_type: 'application/geo+json',
+        remote_path: '/geo',
+        remote_filename: 'france.geojson',
+        remote_version: 'v1',
+      }),
+    });
+    const file = await fileResponse.json() as { id: string };
+
+    // Record downloads
+    for (let i = 0; i < 3; i++) {
+      await SELF.fetch('http://localhost/downloads', {
+        method: 'POST',
+        headers: createAuthHeaders(),
+        body: JSON.stringify({
+          bucket: 'test-bucket',
+          remote_path: '/geo',
+          remote_filename: 'france.geojson',
+          remote_version: 'v1',
+          ip_address: `10.0.0.${i}`,
+        }),
+      });
+    }
+
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/file/${file.id}/downloads?start=${now - 86400000}&end=${now + 86400000}&scale=day`,
+      { headers: createReadHeaders() }
+    );
+    expect(response.status).toBe(200);
+    const data = await response.json() as {
+      file_id: string;
+      buckets: { timestamp: number; downloads: number; unique_downloads: number }[];
+      total_downloads: number;
+      total_unique_downloads: number;
+      scale: string;
+    };
+    expect(data.file_id).toBe(file.id);
+    expect(data.total_downloads).toBe(3);
+    expect(data.total_unique_downloads).toBe(3);
+    expect(data.scale).toBe('day');
+    expect(data.buckets.length).toBe(1);
+    expect(data.buckets[0].downloads).toBe(3);
+  });
+
+  it('returns 404 for nonexistent file', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/file/nonexistent-id/downloads?start=${now - 86400000}&end=${now + 86400000}`,
+      { headers: createReadHeaders() }
+    );
+    expect(response.status).toBe(404);
+  });
+
+  it('returns empty buckets when no downloads exist', async () => {
+    const fileResponse = await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({
+        bucket: 'test-bucket',
+        category: 'geo',
+        entity: 'france',
+        extension: 'geojson',
+        media_type: 'application/geo+json',
+        remote_path: '/geo',
+        remote_filename: 'france.geojson',
+        remote_version: 'v1',
+      }),
+    });
+    const file = await fileResponse.json() as { id: string };
+
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/file/${file.id}/downloads?start=${now - 86400000}&end=${now + 86400000}`,
+      { headers: createReadHeaders() }
+    );
+    expect(response.status).toBe(200);
+    const data = await response.json() as { total_downloads: number; buckets: unknown[] };
+    expect(data.total_downloads).toBe(0);
+    expect(data.buckets).toEqual([]);
+  });
+
+  it('validates required params', async () => {
+    const response = await SELF.fetch(
+      'http://localhost/analytics/file/some-id/downloads',
+      { headers: createReadHeaders() }
+    );
+    expect(response.status).toBe(400);
+  });
+
+  it('validates scale param', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/file/some-id/downloads?start=${now}&end=${now}&scale=week`,
+      { headers: createReadHeaders() }
+    );
+    expect(response.status).toBe(400);
+  });
+});
+
+describe('GET /analytics/top-files', () => {
+  beforeEach(async () => {
+    await env.D1.prepare('DELETE FROM file_downloads').run();
+    await env.D1.prepare('DELETE FROM file_tags').run();
+    await env.D1.prepare('DELETE FROM files').run();
+
+    // Create files
+    await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({
+        bucket: 'test-bucket', category: 'geo', entity: 'france', extension: 'geojson',
+        media_type: 'application/geo+json', remote_path: '/geo', remote_filename: 'france.geojson', remote_version: 'v1',
+        tags: ['europe'],
+      }),
+    });
+
+    await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({
+        bucket: 'test-bucket', category: 'geo', entity: 'germany', extension: 'geojson',
+        media_type: 'application/geo+json', remote_path: '/geo', remote_filename: 'germany.geojson', remote_version: 'v1',
+        tags: ['europe'],
+      }),
+    });
+
+    await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({
+        bucket: 'test-bucket', category: 'weather', entity: 'temperature', extension: 'csv',
+        media_type: 'text/csv', remote_path: '/weather', remote_filename: 'temp.csv', remote_version: 'v1',
+      }),
+    });
+
+    // france: 5 downloads from 3 unique IPs
+    for (let i = 0; i < 5; i++) {
+      await SELF.fetch('http://localhost/downloads', {
+        method: 'POST', headers: createAuthHeaders(),
+        body: JSON.stringify({ bucket: 'test-bucket', remote_path: '/geo', remote_filename: 'france.geojson', remote_version: 'v1', ip_address: `10.0.0.${i % 3}` }),
+      });
+    }
+
+    // germany: 2 downloads from 2 unique IPs
+    for (let i = 0; i < 2; i++) {
+      await SELF.fetch('http://localhost/downloads', {
+        method: 'POST', headers: createAuthHeaders(),
+        body: JSON.stringify({ bucket: 'test-bucket', remote_path: '/geo', remote_filename: 'germany.geojson', remote_version: 'v1', ip_address: `10.1.0.${i}` }),
+      });
+    }
+
+    // temp: 3 downloads from 1 unique IP
+    for (let i = 0; i < 3; i++) {
+      await SELF.fetch('http://localhost/downloads', {
+        method: 'POST', headers: createAuthHeaders(),
+        body: JSON.stringify({ bucket: 'test-bucket', remote_path: '/weather', remote_filename: 'temp.csv', remote_version: 'v1', ip_address: '10.2.0.1' }),
+      });
+    }
+  });
+
+  it('returns files sorted by downloads descending', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/top-files?start=${now - 86400000}&end=${now + 86400000}`,
+      { headers: createReadHeaders() }
+    );
+    expect(response.status).toBe(200);
+    const data = await response.json() as { files: { remote_filename: string; downloads: number; unique_downloads: number }[]; total: number };
+    expect(data.total).toBe(3);
+    expect(data.files.length).toBe(3);
+    expect(data.files[0].remote_filename).toBe('france.geojson');
+    expect(data.files[0].downloads).toBe(5);
+    expect(data.files[1].remote_filename).toBe('temp.csv');
+    expect(data.files[1].downloads).toBe(3);
+    expect(data.files[2].remote_filename).toBe('germany.geojson');
+    expect(data.files[2].downloads).toBe(2);
+  });
+
+  it('sorts by unique_downloads when requested', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/top-files?start=${now - 86400000}&end=${now + 86400000}&sort_by=unique_downloads`,
+      { headers: createReadHeaders() }
+    );
+    const data = await response.json() as { files: { remote_filename: string; unique_downloads: number }[] };
+    expect(data.files[0].remote_filename).toBe('france.geojson');
+    expect(data.files[0].unique_downloads).toBe(3);
+    // germany (2 unique) should come before temp (1 unique)
+    expect(data.files[1].remote_filename).toBe('germany.geojson');
+    expect(data.files[1].unique_downloads).toBe(2);
+    expect(data.files[2].unique_downloads).toBe(1);
+  });
+
+  it('filters by category', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/top-files?start=${now - 86400000}&end=${now + 86400000}&category=geo`,
+      { headers: createReadHeaders() }
+    );
+    const data = await response.json() as { files: unknown[]; total: number };
+    expect(data.total).toBe(2);
+    expect(data.files.length).toBe(2);
+  });
+
+  it('filters by tags', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/top-files?start=${now - 86400000}&end=${now + 86400000}&tags=europe`,
+      { headers: createReadHeaders() }
+    );
+    const data = await response.json() as { files: unknown[]; total: number };
+    expect(data.total).toBe(2);
+  });
+
+  it('supports pagination', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/top-files?start=${now - 86400000}&end=${now + 86400000}&limit=2`,
+      { headers: createReadHeaders() }
+    );
+    const data = await response.json() as { files: unknown[]; total: number };
+    expect(data.total).toBe(3);
+    expect(data.files.length).toBe(2);
+  });
+
+  it('rejects invalid sort_by', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/top-files?start=${now - 86400000}&end=${now + 86400000}&sort_by=invalid`,
+      { headers: createReadHeaders() }
+    );
+    expect(response.status).toBe(400);
+  });
+});
+
+describe('Analytics - category/entity/tags filtering', () => {
+  beforeEach(async () => {
+    await env.D1.prepare('DELETE FROM file_downloads').run();
+    await env.D1.prepare('DELETE FROM file_tags').run();
+    await env.D1.prepare('DELETE FROM files').run();
+
+    // Create two files with different categories
+    await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({
+        bucket: 'test-bucket',
+        category: 'geo',
+        entity: 'france',
+        extension: 'geojson',
+        media_type: 'application/geo+json',
+        remote_path: '/geo',
+        remote_filename: 'france.geojson',
+        remote_version: 'v1',
+        tags: ['europe', 'country'],
+      }),
+    });
+
+    await SELF.fetch('http://localhost/files', {
+      method: 'POST',
+      headers: createAuthHeaders(),
+      body: JSON.stringify({
+        bucket: 'test-bucket',
+        category: 'weather',
+        entity: 'temperature',
+        extension: 'csv',
+        media_type: 'text/csv',
+        remote_path: '/weather',
+        remote_filename: 'temp.csv',
+        remote_version: 'v1',
+        tags: ['climate'],
+      }),
+    });
+
+    // Record downloads for both files
+    for (let i = 0; i < 3; i++) {
+      await SELF.fetch('http://localhost/downloads', {
+        method: 'POST',
+        headers: createAuthHeaders(),
+        body: JSON.stringify({
+          bucket: 'test-bucket',
+          remote_path: '/geo',
+          remote_filename: 'france.geojson',
+          remote_version: 'v1',
+          ip_address: `10.0.0.${i}`,
+        }),
+      });
+    }
+
+    for (let i = 0; i < 2; i++) {
+      await SELF.fetch('http://localhost/downloads', {
+        method: 'POST',
+        headers: createAuthHeaders(),
+        body: JSON.stringify({
+          bucket: 'test-bucket',
+          remote_path: '/weather',
+          remote_filename: 'temp.csv',
+          remote_version: 'v1',
+          ip_address: `10.1.0.${i}`,
+        }),
+      });
+    }
+  });
+
+  it('filters summary by category', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/summary?start=${now - 86400000}&end=${now + 86400000}&category=geo`,
+      { headers: createReadHeaders() }
+    );
+    const data = await response.json() as { total_downloads: number };
+    expect(data.total_downloads).toBe(3);
+  });
+
+  it('filters summary by entity', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/summary?start=${now - 86400000}&end=${now + 86400000}&entity=temperature`,
+      { headers: createReadHeaders() }
+    );
+    const data = await response.json() as { total_downloads: number };
+    expect(data.total_downloads).toBe(2);
+  });
+
+  it('filters summary by tags', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/summary?start=${now - 86400000}&end=${now + 86400000}&tags=europe`,
+      { headers: createReadHeaders() }
+    );
+    const data = await response.json() as { total_downloads: number };
+    expect(data.total_downloads).toBe(3);
+  });
+
+  it('filters timeseries by category', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/timeseries?start=${now - 86400000}&end=${now + 86400000}&scale=day&category=weather`,
+      { headers: createReadHeaders() }
+    );
+    const data = await response.json() as { buckets: { total_downloads: number }[] };
+    expect(data.buckets[0].total_downloads).toBe(2);
+  });
+
+  it('filters user-agents by entity', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/user-agents?start=${now - 86400000}&end=${now + 86400000}&entity=france`,
+      { headers: createReadHeaders() }
+    );
+    expect(response.status).toBe(200);
+  });
+
+  it('returns zero for non-matching category', async () => {
+    const now = Date.now();
+    const response = await SELF.fetch(
+      `http://localhost/analytics/summary?start=${now - 86400000}&end=${now + 86400000}&category=nonexistent`,
+      { headers: createReadHeaders() }
+    );
+    const data = await response.json() as { total_downloads: number };
+    expect(data.total_downloads).toBe(0);
+  });
+});
+
 describe('POST /maintenance/cleanup-downloads', () => {
   beforeEach(async () => {
     await env.D1.prepare('DELETE FROM file_downloads').run();

@@ -22,7 +22,7 @@ export interface FileRecord {
   checksum_sha512: string | null;
   created: number;
   deprecated: boolean;
-  deprecation_reason: string;
+  deprecation_reason: string | null;
   entity: string;
   extension: string;
   extra: Record<string, unknown> | null;
