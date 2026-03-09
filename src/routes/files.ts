@@ -112,7 +112,11 @@ app.get('/by-tuple', async (c) => {
 
 // Get nested index (grouped by entity then extension)
 app.get('/index', async (c) => {
-  const params = getFilterParams(c);
+  const params: SearchParams = {
+    ...getFilterParams(c),
+    limit: c.req.query('limit'),
+    offset: c.req.query('offset'),
+  };
   const index = await getNestedIndex(c.get('db'), params);
 
   setCacheHeaders(c);

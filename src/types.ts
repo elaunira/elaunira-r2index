@@ -126,6 +126,11 @@ export interface FileIndexEntry {
 
 export type NestedIndex = Record<string, Record<string, FileIndexEntry>>;
 
+export interface NestedIndexResult {
+  index: NestedIndex;
+  total: number;
+}
+
 // Downloads tracking
 export interface DownloadRecord {
   id: string;

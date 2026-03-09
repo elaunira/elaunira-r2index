@@ -1,4 +1,4 @@
-import type { FileRecord, CreateFileInput, UpdateFileInput, SearchParams, SearchResult, GroupedSearchResult, GroupedResult, NestedIndex } from '../types';
+import type { FileRecord, CreateFileInput, UpdateFileInput, SearchParams, SearchResult, GroupedSearchResult, GroupedResult, NestedIndex, NestedIndexResult } from '../types';
 
 // ============================================================================
 // Types
@@ -381,11 +381,17 @@ async function searchFilesList(db: D1Database, params: SearchParams): Promise<Se
   return { files, total };
 }
 
-export async function getNestedIndex(db: D1Database, params: SearchParams): Promise<NestedIndex> {
+export async function getNestedIndex(db: D1Database, params: SearchParams): Promise<NestedIndexResult> {
   const { values, whereClause } = buildSearchConditions(params);
-  const query = `SELECT f.* FROM files f${whereClause} ORDER BY f.entity, f.extension`;
 
-  const result = await db.prepare(query).bind(...values).all<FileRecordRaw>();
+  const countResult = await db.prepare(`SELECT COUNT(f.id) as total FROM files f${whereClause}`).bind(...values).first<{ total: number }>();
+  const total = countResult?.total ?? 0;
+
+  const limit = Math.min(parseInt(params.limit ?? '100', 10), 1000);
+  const offset = parseInt(params.offset ?? '0', 10);
+
+  const query = `SELECT f.* FROM files f${whereClause} ORDER BY f.entity, f.extension LIMIT ? OFFSET ?`;
+  const result = await db.prepare(query).bind(...values, limit, offset).all<FileRecordRaw>();
   const files = result.results.map(parseRecord);
 
   await fetchTagsForFiles(db, files);
@@ -398,5 +404,5 @@ export async function getNestedIndex(db: D1Database, params: SearchParams): Prom
     index[file.entity][file.extension] = buildFileEntry(file) as NestedIndex[string][string];
   }
 
-  return index;
+  return { index, total };
 }

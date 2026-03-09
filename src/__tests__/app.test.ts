@@ -601,23 +601,24 @@ describe('GET /files/index - Nested index', () => {
       headers: createAuthHeaders(),
     });
     expect(response.status).toBe(200);
-    const data = await response.json() as Record<string, Record<string, { name?: string; file_size?: string }>>;
+    const data = await response.json() as { index: Record<string, Record<string, { name?: string; file_size?: string }>>; total: number };
 
-    expect(data['user-1']).toBeDefined();
-    expect(data['user-1']['pdf']).toBeDefined();
-    expect(data['user-1']['docx']).toBeDefined();
-    expect(data['user-2']).toBeDefined();
-    expect(data['user-2']['png']).toBeDefined();
+    expect(data.total).toBe(3);
+    expect(data.index['user-1']).toBeDefined();
+    expect(data.index['user-1']['pdf']).toBeDefined();
+    expect(data.index['user-1']['docx']).toBeDefined();
+    expect(data.index['user-2']).toBeDefined();
+    expect(data.index['user-2']['png']).toBeDefined();
   });
 
   it('includes file metadata in index entries', async () => {
     const response = await SELF.fetch('http://localhost/files/index', {
       headers: createAuthHeaders(),
     });
-    const data = await response.json() as Record<string, Record<string, { name?: string; file_size?: string }>>;
+    const data = await response.json() as { index: Record<string, Record<string, { name?: string; file_size?: string }>> };
 
-    expect(data['user-1']['pdf'].name).toBe('PDF File');
-    expect(data['user-1']['pdf'].file_size).toBe('100');
+    expect(data.index['user-1']['pdf'].name).toBe('PDF File');
+    expect(data.index['user-1']['pdf'].file_size).toBe('100');
   });
 
   it('includes Cache-Control header', async () => {
@@ -638,9 +639,10 @@ describe('GET /files/index - Nested index', () => {
     const response = await SELF.fetch('http://localhost/files/index?entity=user-1', {
       headers: createAuthHeaders(),
     });
-    const data = await response.json() as Record<string, Record<string, unknown>>;
+    const data = await response.json() as { index: Record<string, Record<string, unknown>>; total: number };
 
-    expect(Object.keys(data)).toEqual(['user-1']);
+    expect(Object.keys(data.index)).toEqual(['user-1']);
+    expect(data.total).toBe(2);
   });
 });
 
