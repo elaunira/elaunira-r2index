@@ -128,6 +128,9 @@ class TestDownload:
                 "ip_address": "203.0.113.1",
                 "user_agent": "elaunira-r2index/0.1.0",
                 "downloaded_at": 1704067200,
+                "hour_bucket": 1704067200,
+                "day_bucket": 1704067200,
+                "month_bucket": 202401,
             },
         )
 
@@ -193,6 +196,9 @@ class TestDownload:
                 "ip_address": "10.0.0.1",
                 "user_agent": "custom-agent/1.0",
                 "downloaded_at": 1704067200,
+                "hour_bucket": 1704067200,
+                "day_bucket": 1704067200,
+                "month_bucket": 202401,
             },
         )
 
@@ -354,6 +360,9 @@ _DOWNLOAD_RECORD_JSON = {
     "ip_address": "10.0.0.1",
     "user_agent": "test",
     "downloaded_at": 1704067200,
+    "hour_bucket": 1704067200,
+    "day_bucket": 1704067200,
+    "month_bucket": 202401,
 }
 
 _BY_TUPLE_URL = (
