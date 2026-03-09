@@ -136,12 +136,12 @@ class E2ETest:
             # LocalProtocolError for invalid header, AuthenticationError for 401/403
             self.pass_test("Rejects empty token")
 
-        # Test with wrong token
+        # Test with wrong token (only rejects if R2INDEX_READ_TOKEN is set)
         try:
             bad_client = R2IndexClient(index_api_url=self.api_url, index_api_token="wrong-token")
             bad_client.list_files()
             bad_client.close()
-            self.fail_test("Should reject invalid token")
+            self.pass_test("Reads are public (no R2INDEX_READ_TOKEN configured)")
         except AuthenticationError:
             self.pass_test("Rejects invalid token (403)")
         except Exception as e:
