@@ -94,21 +94,32 @@ async function fetchTagsForFiles(db: D1Database, files: FileRecord[]): Promise<v
 
 function buildFileEntry(file: FileRecord): Record<string, unknown> {
   const entry: Record<string, unknown> = {
+    id: file.id,
+    bucket: file.bucket,
+    category: file.category,
+    subcategory: file.subcategory,
+    entity: file.entity,
+    extension: file.extension,
+    name: file.name,
+    media_type: file.media_type,
     checksums: {
       ...(file.checksum_md5 && { md5: file.checksum_md5 }),
       ...(file.checksum_sha1 && { sha1: file.checksum_sha1 }),
       ...(file.checksum_sha256 && { sha256: file.checksum_sha256 }),
       ...(file.checksum_sha512 && { sha512: file.checksum_sha512 }),
     },
+    file_size: file.size !== null ? String(file.size) : null,
+    remote_path: file.remote_path,
+    remote_filename: file.remote_filename,
+    remote_version: file.remote_version,
+    metadata_path: file.metadata_path,
+    deprecated: file.deprecated,
+    deprecation_reason: file.deprecation_reason,
+    tags: file.tags ?? [],
+    extra: file.extra,
+    created: file.created ? new Date(file.created).toISOString() : null,
+    last_updated: file.updated ? new Date(file.updated).toISOString() : null,
   };
-
-  if (file.size !== null) entry.file_size = String(file.size);
-  if (file.updated) entry.last_updated = new Date(file.updated).toISOString();
-  if (file.name) entry.name = file.name;
-
-  if (file.extra) {
-    Object.assign(entry, file.extra);
-  }
 
   return entry;
 }
@@ -366,6 +377,8 @@ export async function getNestedIndex(db: D1Database, params: SearchParams): Prom
 
   const result = await db.prepare(query).bind(...values).all<FileRecordRaw>();
   const files = result.results.map(parseRecord);
+
+  await fetchTagsForFiles(db, files);
 
   const index: NestedIndex = {};
   for (const file of files) {
