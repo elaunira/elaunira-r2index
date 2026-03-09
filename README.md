@@ -7,12 +7,14 @@ A queryable metadata index for files stored in Cloudflare R2. Built as a Cloudfl
 ```
 Client (Airflow, etc.)
     │
-    ├─► Worker API ─► D1 (metadata CRUD/search)
+    ├─► Worker API ─► D1 (metadata CRUD/search/analytics)
+    │                  │
+    │                  └─► R2 (file streaming via /download endpoint)
     │
-    └─► R2 (direct upload/download via S3-compatible API)
+    └─► R2 (direct upload via S3-compatible API)
 ```
 
-The Worker handles metadata only. File content is uploaded/downloaded directly to R2 using the S3-compatible API.
+The Worker handles metadata indexing, download tracking with analytics, and file streaming from R2. File uploads go directly to R2 using the S3-compatible API.
 
 ## Who uses it?
 
@@ -51,10 +53,14 @@ Update `wrangler.jsonc` with the returned `database_id`.
 npm run db:init
 ```
 
-### 4. Set API token
+### 4. Set API tokens
 
 ```bash
-wrangler secret put R2INDEX_API_TOKEN
+# Required: token for write operations (create, update, delete)
+wrangler secret put R2INDEX_WRITE_TOKEN
+
+# Optional: token for read operations (if unset, read operations are public)
+wrangler secret put R2INDEX_READ_TOKEN
 ```
 
 ### 5. Deploy
@@ -71,9 +77,23 @@ See [`wrangler.jsonc`](wrangler.jsonc) for the full configuration.
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `CACHE_MAX_AGE` | Cache-Control max-age in seconds | `60` |
+| `CACHE_MAX_AGE` | Cache-Control max-age in seconds. Set to `-1` to disable caching globally. | `60` |
 | `DOWNLOADS_RETENTION_DAYS` | Days to keep download records before cleanup | `365` |
-| `R2INDEX_API_TOKEN` | Bearer token for API authentication (set via `wrangler secret put`) | Required |
+| `R2INDEX_WRITE_TOKEN` | Bearer token for write operations (set via `wrangler secret put`) | Required |
+| `R2INDEX_READ_TOKEN` | Bearer token for read operations (set via `wrangler secret put`). If unset, read operations are public. The write token also grants read access. | Optional |
+
+### Bindings
+
+| Binding | Type | Description |
+|---------|------|-------------|
+| `D1` | D1 Database | Metadata storage |
+| `R2` | R2 Bucket | File storage (used by `/download` endpoint) |
+
+### Caching
+
+All GET responses include a `Cache-Control` header. You can disable caching:
+- **Globally:** Set `CACHE_MAX_AGE=-1` to disable for all responses
+- **Per-request:** Add `?cache=false` to any GET request
 
 ## Data Model
 
@@ -116,7 +136,11 @@ The tuple `(bucket, remote_path, remote_filename, remote_version)` uniquely iden
 
 ## API Reference
 
-All endpoints require authentication via `Authorization: Bearer <token>` header.
+Authentication uses split tokens:
+- **Read operations** (GET): Require `R2INDEX_READ_TOKEN`. If unset, read operations are public. The write token also grants read access.
+- **Write operations** (POST, PUT, DELETE): Always require `R2INDEX_WRITE_TOKEN`.
+
+Pass the token via `Authorization: Bearer <token>` header.
 
 ### D1 Read Replication (Sessions API)
 
@@ -376,54 +400,78 @@ GET /files/index
 
 Returns files grouped by entity then by extension in a nested structure. Useful for generating compatibility indexes.
 
-**Query Parameters:** Same filters as Search Files (except `limit`, `offset`, `group_by`).
+**Query Parameters:** Same filters as Search Files, plus `limit` (default: 100, max: 1000) and `offset` (default: 0) for pagination.
 
 **Example Request:**
 
 ```bash
-curl "https://r2index.acme.com/files/index?category=acme"
+curl "https://r2index.acme.com/files/index?category=acme&limit=100&offset=0"
 ```
 
 **Response:**
 
 ```json
 {
-  "acme-abuser": {
-    "csv": {
-      "checksums": {
-        "md5": "21a165f3ddef92b90dccb0c1bb4e249f",
-        "sha1": "b588c39c691a2bc2cdd81e9f826ae9b5eb163e39",
-        "sha256": "8dac526e40c250f3ad117d05452e04814e2c979754a2e4810d8f85413d188ba6",
-        "sha512": "0f4bdedf66e5ec214aa1302d624913c2137c9cbfe1f81c0a63138c9ddd69d0c0c8ffc5f296a3c6d9c4256b86ca2a18b08c34e7f6897d152c16dde6526a07461f"
-      },
-      "file_size": "5023465",
-      "last_updated": "2026-02-03T18:55:50.000Z",
-      "name": "Abuser",
-      "header_line": "# ip_start,ip_end",
-      "line_count": 169964
-    },
-    "mmdb": {
-      "checksums": {
-        "md5": "2cf1f2d9ae301714b7ed7979553c76be"
-      },
-      "file_size": "10573656",
-      "last_updated": "2026-02-03T18:55:50.000Z"
+  "index": {
+    "acme-abuser": {
+      "csv": {
+        "id": "550e8400-e29b-41d4-a716-446655440000",
+        "bucket": "my-bucket",
+        "category": "acme",
+        "subcategory": null,
+        "entity": "acme-abuser",
+        "extension": "csv",
+        "name": "Abuser",
+        "media_type": "text/csv",
+        "checksums": {
+          "md5": "21a165f3ddef92b90dccb0c1bb4e249f",
+          "sha256": "8dac526e40c250f3ad117d05452e04814e2c979754a2e4810d8f85413d188ba6"
+        },
+        "file_size": "5023465",
+        "remote_path": "acme/abuser",
+        "remote_filename": "abuser.csv",
+        "remote_version": "2026-02-03",
+        "metadata_path": null,
+        "deprecated": false,
+        "deprecation_reason": "",
+        "tags": ["ip", "security"],
+        "extra": {
+          "header_line": "# ip_start,ip_end",
+          "line_count": 169964
+        },
+        "created": "2026-02-03T18:55:50.000Z",
+        "last_updated": "2026-02-03T18:55:50.000Z"
+      }
     }
   },
-  "acme-as": {
-    "csv": {
-      "checksums": {
-        "md5": "8356651e9e7bfdbf94fa41c9911d9cdf"
-      },
-      "file_size": "7355656",
-      "last_updated": "2026-02-03T18:54:02.000Z",
-      "name": "AS"
-    }
-  }
+  "total": 42
 }
 ```
 
-Extra fields from the `extra` JSON column are merged into each entry.
+### Download File
+
+```
+GET /download/:id
+GET /download?bucket=...&remote_path=...&remote_filename=...&remote_version=...
+```
+
+Streams a file from R2, records a download event for analytics, and returns the file content.
+
+**By ID:**
+
+```bash
+curl "https://r2index.acme.com/download/550e8400-e29b-41d4-a716-446655440000"
+```
+
+**By Remote Tuple:**
+
+```bash
+curl "https://r2index.acme.com/download?bucket=my-bucket&remote_path=acme/abuser&remote_filename=abuser.csv&remote_version=2026-02-03"
+```
+
+**Response:** File content with appropriate `Content-Type`, `Content-Length`, `Content-Disposition`, and `ETag` headers.
+
+Returns `404` if the file metadata or R2 object is not found.
 
 ### Record Download
 
@@ -502,13 +550,17 @@ Returns download counts over time, grouped by hour, day, or month.
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `bucket` | string | No | Filter by bucket |
+| `category` | string | No | Filter by file category (requires JOIN with files table) |
 | `end` | integer | Yes | End timestamp (ms) |
+| `entity` | string | No | Filter by file entity (requires JOIN with files table) |
 | `limit` | integer | No | Max files per bucket (default: 100, max: 1000) |
 | `remote_filename` | string | No | Filter by remote filename |
 | `remote_path` | string | No | Filter by remote path |
 | `remote_version` | string | No | Filter by remote version |
 | `scale` | string | No | Time bucket: `hour`, `day`, `month` (default: `day`) |
 | `start` | integer | Yes | Start timestamp (ms) |
+| `subcategory` | string | No | Filter by file subcategory (requires JOIN with files table) |
+| `tags` | string | No | Filter by file tags (comma-separated, must have ALL; requires JOIN) |
 
 **Example Request:**
 
@@ -563,12 +615,16 @@ GET /analytics/summary
 
 Returns aggregate statistics for a time period.
 
-**Query Parameters:** Same as Time Series (`start`, `end`, file filters).
+**Query Parameters:** Same as Time Series (`start`, `end`, `bucket`, `remote_path`, `remote_filename`, `remote_version`, `category`, `subcategory`, `entity`, `tags`).
 
-**Example Request:**
+**Example Requests:**
 
 ```bash
+# Overall summary
 curl "https://r2index.acme.com/analytics/summary?start=1704067200000&end=1706745600000"
+
+# Summary for a specific category
+curl "https://r2index.acme.com/analytics/summary?start=1704067200000&end=1706745600000&category=boundaries&subcategory=countries"
 ```
 
 **Response:**
@@ -635,7 +691,7 @@ GET /analytics/user-agents
 
 Returns download statistics grouped by user agent.
 
-**Query Parameters:** Same as Time Series, plus `limit` (default: 20, max: 100).
+**Query Parameters:** Same as Time Series (`start`, `end`, all file filters), plus `limit` (default: 20, max: 100).
 
 **Example Request:**
 
@@ -654,6 +710,99 @@ curl "https://r2index.acme.com/analytics/user-agents?start=1704067200000&end=170
   "period": { "start": 1704067200000, "end": 1706745600000 }
 }
 ```
+
+### Analytics: Top Files
+
+```
+GET /analytics/top-files
+```
+
+Returns files ranked by total or unique download count within a time period.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `start` | integer | Yes | Start timestamp (ms) |
+| `end` | integer | Yes | End timestamp (ms) |
+| `sort_by` | string | No | `downloads` (default) or `unique_downloads` |
+| `limit` | integer | No | Max results (default: 100, max: 1000) |
+| `offset` | integer | No | Pagination offset (default: 0) |
+| `bucket` | string | No | Filter by bucket |
+| `category` | string | No | Filter by file category |
+| `subcategory` | string | No | Filter by file subcategory |
+| `entity` | string | No | Filter by file entity |
+| `tags` | string | No | Filter by file tags (comma-separated, must have ALL) |
+
+**Example Requests:**
+
+```bash
+# Top downloaded files overall
+curl "https://r2index.acme.com/analytics/top-files?start=1704067200000&end=1706745600000"
+
+# Top files by unique downloads for a category
+curl "https://r2index.acme.com/analytics/top-files?start=1704067200000&end=1706745600000&sort_by=unique_downloads&category=boundaries&subcategory=countries"
+```
+
+**Response:**
+
+```json
+{
+  "files": [
+    {
+      "id": "550e8400-e29b-41d4-a716-446655440000",
+      "bucket": "my-bucket",
+      "remote_path": "geo/boundaries",
+      "remote_filename": "france.geojson",
+      "remote_version": "v1",
+      "downloads": 1542,
+      "unique_downloads": 983
+    }
+  ],
+  "total": 250,
+  "period": { "start": 1704067200000, "end": 1706745600000 }
+}
+```
+
+### Analytics: Per-File Download Counts
+
+```
+GET /analytics/file/:id/downloads
+```
+
+Returns download counts for a single file, grouped by time bucket.
+
+**Query Parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `start` | integer | Yes | Start timestamp (ms) |
+| `end` | integer | Yes | End timestamp (ms) |
+| `scale` | string | No | Time bucket: `hour`, `day`, `month` (default: `day`) |
+
+**Example Request:**
+
+```bash
+curl "https://r2index.acme.com/analytics/file/550e8400-e29b-41d4-a716-446655440000/downloads?start=1704067200000&end=1706745600000&scale=day"
+```
+
+**Response:**
+
+```json
+{
+  "file_id": "550e8400-e29b-41d4-a716-446655440000",
+  "buckets": [
+    { "timestamp": 1704067200000, "downloads": 45, "unique_downloads": 30 },
+    { "timestamp": 1704153600000, "downloads": 52, "unique_downloads": 38 }
+  ],
+  "total_downloads": 97,
+  "total_unique_downloads": 68,
+  "period": { "start": 1704067200000, "end": 1706745600000 },
+  "scale": "day"
+}
+```
+
+Returns `404` if the file does not exist.
 
 ### Maintenance: Cleanup Downloads
 
@@ -759,7 +908,11 @@ export default {
 | `remote_version` | TEXT | Version identifier |
 | `user_agent` | TEXT | Client user agent |
 
-**Indexes:** `day_bucket`, `hour_bucket`, `month_bucket`, `(bucket, remote_path, remote_filename, remote_version, day_bucket)`, `(ip_address, day_bucket)`
+**Indexes:**
+- Time bucket range scans: `(hour_bucket)`, `(day_bucket)`, `(month_bucket)`
+- Time-first composite (global analytics): `(day_bucket, bucket, remote_path, remote_filename, remote_version)`, etc.
+- File-first composite (per-file lookups): `(bucket, remote_path, remote_filename, remote_version, day_bucket)`, etc.
+- IP lookups: `(ip_address, day_bucket)`
 
 ## Development
 
