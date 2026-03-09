@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "elaunira-r2index"
-version = "0.10.17"
+version = "0.10.18"
 description = "Python library for uploading files to R2 and registering them with the r2index API"
 readme = "README.md"
 license = "MIT"
