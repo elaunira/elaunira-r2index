@@ -75,7 +75,7 @@ async function setFileTags(db: D1Database, fileId: string, tags: string[] | unde
 async function fetchTagsForFiles(db: D1Database, files: FileRecord[]): Promise<void> {
   if (files.length === 0) return;
 
-  const BATCH_SIZE = 90;
+  const BATCH_SIZE = 100;
   const fileIds = files.map(f => f.id);
   const statements = [];
 
