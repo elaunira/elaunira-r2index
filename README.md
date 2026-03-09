@@ -47,10 +47,10 @@ wrangler d1 create r2index
 
 Update `wrangler.jsonc` with the returned `database_id`.
 
-### 3. Apply schema
+### 3. Apply migrations
 
 ```bash
-npm run db:init
+npm run db:migrate
 ```
 
 ### 4. Set API tokens

@@ -5,7 +5,10 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "db:init": "wrangler d1 execute r2index --file=src/db/schema.sql --remote",
+    "db:migrate": "wrangler d1 migrations apply r2index --remote",
+    "db:migrate:local": "wrangler d1 migrations apply r2index --local",
+    "db:migrate:create": "wrangler d1 migrations create r2index",
+    "db:migrate:list": "wrangler d1 migrations list r2index --remote",
     "test": "vitest run",
     "test:watch": "vitest"
   },

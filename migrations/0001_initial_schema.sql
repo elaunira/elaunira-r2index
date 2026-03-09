@@ -1,3 +1,6 @@
+-- Migration number: 0001 	 2026-03-09T14:36:53.717Z
+-- Initial schema
+
 CREATE TABLE IF NOT EXISTS files (
     id TEXT PRIMARY KEY,
     name TEXT,
