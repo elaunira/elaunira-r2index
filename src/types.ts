@@ -13,6 +13,7 @@ export interface Variables {
 export interface FileRecord {
   bucket: string;
   category: string;
+  subcategory: string | null;
   checksum_md5: string | null;
   checksum_sha1: string | null;
   checksum_sha256: string | null;
@@ -38,6 +39,7 @@ export interface FileRecord {
 export interface CreateFileInput {
   bucket: string;
   category: string;
+  subcategory?: string;
   checksum_md5?: string;
   checksum_sha1?: string;
   checksum_sha256?: string;
@@ -60,6 +62,7 @@ export interface CreateFileInput {
 export interface UpdateFileInput {
   bucket?: string;
   category?: string;
+  subcategory?: string;
   checksum_md5?: string;
   checksum_sha1?: string;
   checksum_sha256?: string;
@@ -82,6 +85,7 @@ export interface UpdateFileInput {
 export interface SearchParams {
   bucket?: string;
   category?: string;
+  subcategory?: string;
   deprecated?: string;
   entity?: string;
   extension?: string;

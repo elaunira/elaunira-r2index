@@ -82,6 +82,7 @@ See [`wrangler.jsonc`](wrangler.jsonc) for the full configuration.
 | Field | Description | Example |
 |-------|-------------|---------|
 | `category` | Product or service grouping | `acme` |
+| `subcategory` | Sub-grouping within a category | `countries`, `regions` |
 | `entity` | Specific dataset identifier | `acme-abuser`, `acme-geolocation` |
 | `extension` | File format | `csv`, `csv.zip`, `mmdb` |
 | `media_type` | MIME type | `text/csv`, `application/zip` |
@@ -148,6 +149,7 @@ Creates or updates a file based on the unique constraint `(bucket, remote_path, 
 {
   "bucket": "my-bucket",
   "category": "acme",
+  "subcategory": null,
   "entity": "acme-abuser",
   "extension": "csv",
   "media_type": "text/csv",
@@ -172,6 +174,7 @@ Creates or updates a file based on the unique constraint `(bucket, remote_path, 
 |-------|------|----------|-------------|
 | `bucket` | string | Yes | S3/R2 bucket name |
 | `category` | string | Yes | Product or service grouping (e.g., `acme`) |
+| `subcategory` | string | No | Sub-grouping within a category (e.g., `countries`) |
 | `checksum_md5` | string | No | MD5 hash |
 | `checksum_sha1` | string | No | SHA1 hash |
 | `checksum_sha256` | string | No | SHA256 hash |
@@ -276,6 +279,7 @@ GET /files
 |-----------|------|-------------|
 | `bucket` | string | Filter by bucket (exact match) |
 | `category` | string | Filter by category (exact match) |
+| `subcategory` | string | Filter by subcategory (exact match) |
 | `deprecated` | boolean | Filter by deprecated status (`true` or `false`) |
 | `entity` | string | Filter by entity (exact match) |
 | `extension` | string | Filter by extension (exact match) |
@@ -283,7 +287,7 @@ GET /files
 | `media_type` | string | Filter by media type (exact match) |
 | `offset` | integer | Pagination offset (default: 0) |
 | `tags` | string | Filter by tags (comma-separated, must have ALL) |
-| `group_by` | string | Group results by field: `bucket`, `category`, `entity`, `extension`, `media_type`, `deprecated` |
+| `group_by` | string | Group results by field: `bucket`, `category`, `subcategory`, `entity`, `extension`, `media_type`, `deprecated` |
 
 **Example Requests:**
 
@@ -336,6 +340,7 @@ curl "https://r2index.acme.com/files?category=acme&group_by=extension"
       "bucket": "my-bucket",
       "name": "Abuser",
       "category": "acme",
+      "subcategory": null,
       "entity": "acme-abuser",
       "extension": "csv",
       "media_type": "text/csv",
@@ -706,6 +711,7 @@ export default {
 |--------|------|-------------|
 | `bucket` | TEXT | S3/R2 bucket name |
 | `category` | TEXT | File category |
+| `subcategory` | TEXT | File subcategory |
 | `checksum_md5` | TEXT | MD5 checksum |
 | `checksum_sha1` | TEXT | SHA1 checksum |
 | `checksum_sha256` | TEXT | SHA256 checksum |

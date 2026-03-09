@@ -135,6 +135,7 @@ class AsyncR2IndexClient:
         self,
         bucket: str | None = None,
         category: str | None = None,
+        subcategory: str | None = None,
         entity: str | None = None,
         extension: str | None = None,
         media_type: str | None = None,
@@ -149,6 +150,7 @@ class AsyncR2IndexClient:
         Args:
             bucket: Filter by bucket.
             category: Filter by category.
+            subcategory: Filter by subcategory.
             entity: Filter by entity.
             extension: Filter by file extension.
             media_type: Filter by media type.
@@ -165,6 +167,8 @@ class AsyncR2IndexClient:
             params["bucket"] = bucket
         if category:
             params["category"] = category
+        if subcategory:
+            params["subcategory"] = subcategory
         if entity:
             params["entity"] = entity
         if extension:
@@ -294,6 +298,7 @@ class AsyncR2IndexClient:
         self,
         bucket: str | None = None,
         category: str | None = None,
+        subcategory: str | None = None,
         entity: str | None = None,
         tags: list[str] | None = None,
     ) -> dict[str, Any]:
@@ -303,6 +308,7 @@ class AsyncR2IndexClient:
         Args:
             bucket: Filter by bucket.
             category: Filter by category.
+            subcategory: Filter by subcategory.
             entity: Filter by entity.
             tags: Filter by tags.
 
@@ -314,6 +320,8 @@ class AsyncR2IndexClient:
             params["bucket"] = bucket
         if category:
             params["category"] = category
+        if subcategory:
+            params["subcategory"] = subcategory
         if entity:
             params["entity"] = entity
         if tags:
@@ -511,6 +519,7 @@ class AsyncR2IndexClient:
         name: str | None = None,
         progress_callback: Callable[[int], None] | None = None,
         progress_interval: float | None = 10.0,
+        subcategory: str | None = None,
         tags: list[str] | None = None,
         transfer_config: R2TransferConfig | None = None,
     ) -> FileRecord:
@@ -611,6 +620,7 @@ class AsyncR2IndexClient:
         create_request = FileCreateRequest(
             bucket=bucket,
             category=category,
+            subcategory=subcategory,
             entity=entity,
             extension=extension,
             media_type=media_type,

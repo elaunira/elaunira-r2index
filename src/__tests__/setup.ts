@@ -9,6 +9,7 @@ export async function setupDatabase() {
         name TEXT,
         bucket TEXT NOT NULL,
         category TEXT NOT NULL,
+        subcategory TEXT,
         entity TEXT NOT NULL,
         extension TEXT NOT NULL,
         media_type TEXT NOT NULL,

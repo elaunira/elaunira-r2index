@@ -19,6 +19,7 @@ class FileCreateRequest(BaseModel):
 
     bucket: str
     category: str
+    subcategory: str | None = None
     entity: str
     extension: str
     media_type: str
@@ -43,6 +44,7 @@ class FileUpdateRequest(BaseModel):
 
     bucket: str | None = None
     category: str | None = None
+    subcategory: str | None = None
     entity: str | None = None
     extension: str | None = None
     media_type: str | None = None
@@ -68,6 +70,7 @@ class FileRecord(BaseModel):
     id: str
     bucket: str
     category: str
+    subcategory: str | None = None
     entity: str
     extension: str
     media_type: str

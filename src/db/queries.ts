@@ -33,6 +33,7 @@ function buildSearchConditions(params: SearchParams): QueryConditions {
 
   if (params.bucket) { conditions.push('f.bucket = ?'); values.push(params.bucket); }
   if (params.category) { conditions.push('f.category = ?'); values.push(params.category); }
+  if (params.subcategory) { conditions.push('f.subcategory = ?'); values.push(params.subcategory); }
   if (params.entity) { conditions.push('f.entity = ?'); values.push(params.entity); }
   if (params.extension) { conditions.push('f.extension = ?'); values.push(params.extension); }
   if (params.media_type) { conditions.push('f.media_type = ?'); values.push(params.media_type); }
@@ -160,13 +161,14 @@ export async function createFile(db: D1Database, input: CreateFileInput): Promis
   const now = Date.now();
 
   await db.prepare(`
-    INSERT INTO files (id, name, bucket, category, entity, extension, media_type, remote_path, remote_filename, remote_version, metadata_path, size, checksum_md5, checksum_sha1, checksum_sha256, checksum_sha512, extra, deprecated, deprecation_reason, created, updated)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO files (id, name, bucket, category, subcategory, entity, extension, media_type, remote_path, remote_filename, remote_version, metadata_path, size, checksum_md5, checksum_sha1, checksum_sha256, checksum_sha512, extra, deprecated, deprecation_reason, created, updated)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     id,
     input.name ?? null,
     input.bucket,
     input.category,
+    input.subcategory ?? null,
     input.entity,
     input.extension,
     input.media_type,
@@ -202,6 +204,7 @@ export async function updateFile(db: D1Database, id: string, input: UpdateFileIn
     ['name', 'name = ?', v => v],
     ['bucket', 'bucket = ?', v => v],
     ['category', 'category = ?', v => v],
+    ['subcategory', 'subcategory = ?', v => v],
     ['entity', 'entity = ?', v => v],
     ['extension', 'extension = ?', v => v],
     ['media_type', 'media_type = ?', v => v],
@@ -273,13 +276,14 @@ export async function upsertFile(db: D1Database, input: CreateFileInput): Promis
     const now = Date.now();
     await db.prepare(`
       UPDATE files SET
-        name = ?, category = ?, entity = ?, extension = ?, media_type = ?, metadata_path = ?, size = ?,
+        name = ?, category = ?, subcategory = ?, entity = ?, extension = ?, media_type = ?, metadata_path = ?, size = ?,
         checksum_md5 = ?, checksum_sha1 = ?, checksum_sha256 = ?, checksum_sha512 = ?, extra = ?,
         deprecated = ?, deprecation_reason = ?, updated = ?
       WHERE id = ?
     `).bind(
       input.name ?? null,
       input.category,
+      input.subcategory ?? null,
       input.entity,
       input.extension,
       input.media_type,
@@ -310,7 +314,7 @@ export async function upsertFile(db: D1Database, input: CreateFileInput): Promis
 // Search Operations
 // ============================================================================
 
-const GROUPABLE_FIELDS = ['bucket', 'category', 'entity', 'extension', 'media_type', 'deprecated'] as const;
+const GROUPABLE_FIELDS = ['bucket', 'category', 'subcategory', 'entity', 'extension', 'media_type', 'deprecated'] as const;
 
 export async function searchFiles(db: D1Database, params: SearchParams): Promise<SearchResult | GroupedSearchResult> {
   if (params.group_by) {

@@ -14,6 +14,7 @@ function getSearchParams(c: Context): SearchParams {
   return {
     bucket: c.req.query('bucket'),
     category: c.req.query('category'),
+    subcategory: c.req.query('subcategory'),
     entity: c.req.query('entity'),
     extension: c.req.query('extension'),
     media_type: c.req.query('media_type'),
@@ -29,6 +30,7 @@ function getFilterParams(c: Context): SearchParams {
   return {
     bucket: c.req.query('bucket'),
     category: c.req.query('category'),
+    subcategory: c.req.query('subcategory'),
     entity: c.req.query('entity'),
     extension: c.req.query('extension'),
     media_type: c.req.query('media_type'),

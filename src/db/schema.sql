@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS files (
     name TEXT,
     bucket TEXT NOT NULL,
     category TEXT NOT NULL,
+    subcategory TEXT,
     entity TEXT NOT NULL,
     extension TEXT NOT NULL,
     media_type TEXT NOT NULL,
@@ -30,6 +31,7 @@ CREATE TABLE IF NOT EXISTS file_tags (
 );
 
 CREATE INDEX IF NOT EXISTS idx_files_category ON files(category);
+CREATE INDEX IF NOT EXISTS idx_files_subcategory ON files(subcategory);
 CREATE INDEX IF NOT EXISTS idx_files_entity ON files(entity);
 CREATE INDEX IF NOT EXISTS idx_files_extension ON files(extension);
 CREATE INDEX IF NOT EXISTS idx_files_media_type ON files(media_type);

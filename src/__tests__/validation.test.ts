@@ -253,7 +253,7 @@ describe('searchParamsSchema', () => {
   });
 
   it('accepts valid group_by values', () => {
-    const validGroupBy = ['bucket', 'category', 'entity', 'extension', 'media_type', 'deprecated'];
+    const validGroupBy = ['bucket', 'category', 'subcategory', 'entity', 'extension', 'media_type', 'deprecated'];
     for (const group_by of validGroupBy) {
       const result = searchParamsSchema.safeParse({ group_by });
       expect(result.success).toBe(true);
