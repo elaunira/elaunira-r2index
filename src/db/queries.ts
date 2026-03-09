@@ -76,16 +76,21 @@ async function fetchTagsForFiles(db: D1Database, files: FileRecord[]): Promise<v
   if (files.length === 0) return;
 
   const BATCH_SIZE = 90;
-  const tagsByFile = new Map<string, string[]>();
   const fileIds = files.map(f => f.id);
+  const statements = [];
 
   for (let i = 0; i < fileIds.length; i += BATCH_SIZE) {
     const batch = fileIds.slice(i, i + BATCH_SIZE);
     const placeholders = batch.map(() => '?').join(', ');
-    const result = await db.prepare(
-      `SELECT file_id, tag FROM file_tags WHERE file_id IN (${placeholders})`
-    ).bind(...batch).all<{ file_id: string; tag: string }>();
+    statements.push(
+      db.prepare(`SELECT file_id, tag FROM file_tags WHERE file_id IN (${placeholders})`).bind(...batch)
+    );
+  }
 
+  const results = await db.batch<{ file_id: string; tag: string }>(statements);
+  const tagsByFile = new Map<string, string[]>();
+
+  for (const result of results) {
     for (const row of result.results) {
       if (!tagsByFile.has(row.file_id)) tagsByFile.set(row.file_id, []);
       tagsByFile.get(row.file_id)!.push(row.tag);
