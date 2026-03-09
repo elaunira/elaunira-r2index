@@ -75,16 +75,21 @@ async function setFileTags(db: D1Database, fileId: string, tags: string[] | unde
 async function fetchTagsForFiles(db: D1Database, files: FileRecord[]): Promise<void> {
   if (files.length === 0) return;
 
-  const fileIds = files.map(f => f.id);
-  const placeholders = fileIds.map(() => '?').join(', ');
-  const result = await db.prepare(
-    `SELECT file_id, tag FROM file_tags WHERE file_id IN (${placeholders})`
-  ).bind(...fileIds).all<{ file_id: string; tag: string }>();
-
+  const BATCH_SIZE = 90;
   const tagsByFile = new Map<string, string[]>();
-  for (const row of result.results) {
-    if (!tagsByFile.has(row.file_id)) tagsByFile.set(row.file_id, []);
-    tagsByFile.get(row.file_id)!.push(row.tag);
+  const fileIds = files.map(f => f.id);
+
+  for (let i = 0; i < fileIds.length; i += BATCH_SIZE) {
+    const batch = fileIds.slice(i, i + BATCH_SIZE);
+    const placeholders = batch.map(() => '?').join(', ');
+    const result = await db.prepare(
+      `SELECT file_id, tag FROM file_tags WHERE file_id IN (${placeholders})`
+    ).bind(...batch).all<{ file_id: string; tag: string }>();
+
+    for (const row of result.results) {
+      if (!tagsByFile.has(row.file_id)) tagsByFile.set(row.file_id, []);
+      tagsByFile.get(row.file_id)!.push(row.tag);
+    }
   }
 
   for (const file of files) {
