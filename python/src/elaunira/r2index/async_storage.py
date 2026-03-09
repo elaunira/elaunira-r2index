@@ -8,6 +8,7 @@ from pathlib import Path
 import aioboto3
 from aiobotocore.config import AioConfig
 from boto3.s3.transfer import TransferConfig
+from botocore.exceptions import ClientError
 
 from .exceptions import DownloadError, UploadError
 from .storage import R2Config, R2TransferConfig, _format_bytes
@@ -203,7 +204,7 @@ class AsyncR2Storage:
             ) as client:
                 await client.head_object(Bucket=bucket, Key=object_key)
                 return True
-        except client.exceptions.ClientError as e:
+        except ClientError as e:
             if e.response["Error"]["Code"] == "404":
                 return False
             raise UploadError(f"Failed to check object existence: {e}") from e

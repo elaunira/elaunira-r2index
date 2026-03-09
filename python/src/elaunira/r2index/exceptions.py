@@ -4,10 +4,20 @@
 class R2IndexError(Exception):
     """Base exception for r2index library errors."""
 
-    def __init__(self, message: str, status_code: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        code: str | None = None,
+        resolution: str | None = None,
+        details: object = None,
+    ) -> None:
         super().__init__(message)
         self.message = message
         self.status_code = status_code
+        self.code = code
+        self.resolution = resolution
+        self.details = details
 
 
 class AuthenticationError(R2IndexError):
@@ -54,7 +64,11 @@ class ChecksumVerificationError(DownloadError):
         message: str,
         expected: str | None = None,
         actual: str | None = None,
+        status_code: int | None = None,
+        code: str | None = None,
+        resolution: str | None = None,
+        details: object = None,
     ) -> None:
-        super().__init__(message)
+        super().__init__(message, status_code, code, resolution, details)
         self.expected = expected
         self.actual = actual

@@ -76,7 +76,7 @@ class FileRecord(BaseModel):
     media_type: str
     remote_path: str
     remote_filename: str
-    remote_version: str
+    remote_version: str | None = None
     name: str | None = None
     tags: list[str] = Field(default_factory=list)
     extra: dict[str, Any] | None = None
@@ -131,6 +131,20 @@ class IndexResponse(BaseModel):
     total: int
 
 
+class GroupedResult(BaseModel):
+    """Single group in a grouped search response."""
+
+    value: str
+    count: int
+
+
+class GroupedSearchResponse(BaseModel):
+    """Response for grouped file search (group_by)."""
+
+    groups: list[GroupedResult]
+    total: int
+
+
 class DownloadRecordRequest(BaseModel):
     """Request payload for recording a download."""
 
@@ -149,10 +163,13 @@ class DownloadRecord(BaseModel):
     bucket: str
     remote_path: str
     remote_filename: str
-    remote_version: str
+    remote_version: str | None = None
     ip_address: str
     user_agent: str | None = None
-    downloaded_at: int  # Unix timestamp
+    downloaded_at: int  # Unix timestamp (ms)
+    hour_bucket: int
+    day_bucket: int
+    month_bucket: int
 
 
 class FileDownloadStats(BaseModel):
@@ -162,7 +179,7 @@ class FileDownloadStats(BaseModel):
     bucket: str
     remote_path: str
     remote_filename: str
-    remote_version: str
+    remote_version: str | None = None
     downloads: int
     unique_downloads: int
 
@@ -184,12 +201,19 @@ class TimeseriesResponse(BaseModel):
     scale: str
 
 
+class UserAgentDownloads(BaseModel):
+    """User agent with download count in summary response."""
+
+    user_agent: str
+    downloads: int
+
+
 class SummaryResponse(BaseModel):
     """Response for summary analytics."""
 
     total_downloads: int
     unique_downloads: int
-    top_user_agents: list[dict[str, Any]]
+    top_user_agents: list[UserAgentDownloads]
     period: dict[str, int]
 
 
@@ -199,7 +223,7 @@ class DownloadByIpEntry(BaseModel):
     bucket: str
     remote_path: str
     remote_filename: str
-    remote_version: str
+    remote_version: str | None = None
     downloaded_at: int
     user_agent: str | None = None
 
@@ -224,6 +248,45 @@ class UserAgentsResponse(BaseModel):
 
     user_agents: list[UserAgentEntry]
     period: dict[str, int]
+
+
+class TopFileEntry(BaseModel):
+    """Single file entry in top files response."""
+
+    id: str | None = None
+    bucket: str
+    remote_path: str
+    remote_filename: str
+    remote_version: str | None = None
+    downloads: int
+    unique_downloads: int
+
+
+class TopFilesResponse(BaseModel):
+    """Response for top files by downloads."""
+
+    files: list[TopFileEntry]
+    total: int
+    period: dict[str, int]
+
+
+class FileDownloadCountBucket(BaseModel):
+    """Single time bucket for per-file download counts."""
+
+    timestamp: int
+    downloads: int
+    unique_downloads: int
+
+
+class FileDownloadCountResponse(BaseModel):
+    """Response for per-file download counts."""
+
+    file_id: str
+    buckets: list[FileDownloadCountBucket]
+    total_downloads: int
+    total_unique_downloads: int
+    period: dict[str, int]
+    scale: str
 
 
 class CleanupResponse(BaseModel):

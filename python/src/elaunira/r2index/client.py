@@ -26,14 +26,17 @@ from .models import (
     DownloadRecordRequest,
     DownloadsByIpResponse,
     FileCreateRequest,
+    FileDownloadCountResponse,
     FileListResponse,
     FileRecord,
     FileUpdateRequest,
+    GroupedSearchResponse,
     HealthResponse,
     IndexResponse,
     RemoteTuple,
     SummaryResponse,
     TimeseriesResponse,
+    TopFilesResponse,
     UserAgentsResponse,
 )
 from .storage import R2Config, R2Storage, R2TransferConfig
@@ -112,22 +115,32 @@ class R2IndexClient:
             return response.json()
 
         status = response.status_code
+        message = response.text
+        code = None
+        resolution = None
+        details = None
+
         try:
             error_data = response.json()
-            message = error_data.get("error", response.text)
+            error_body = error_data.get("error", {})
+            if isinstance(error_body, dict):
+                message = error_body.get("message", message)
+                code = error_body.get("code")
+                resolution = error_body.get("resolution")
+                details = error_body.get("details")
         except Exception:
-            message = response.text
+            pass
 
         if status == 401 or status == 403:
-            raise AuthenticationError(message, status)
+            raise AuthenticationError(message, status, code, resolution, details)
         elif status == 404:
-            raise NotFoundError(message, status)
+            raise NotFoundError(message, status, code, resolution, details)
         elif status == 400:
-            raise ValidationError(message, status)
+            raise ValidationError(message, status, code, resolution, details)
         elif status == 409:
-            raise ConflictError(message, status)
+            raise ConflictError(message, status, code, resolution, details)
         else:
-            raise R2IndexError(message, status)
+            raise R2IndexError(message, status, code, resolution, details)
 
     # File Operations
 
@@ -187,6 +200,58 @@ class R2IndexClient:
         response = self._client.get("/files", params=params)
         data = self._handle_response(response)
         return FileListResponse.model_validate(data)
+
+    def list_files_grouped(
+        self,
+        group_by: str,
+        bucket: str | None = None,
+        category: str | None = None,
+        subcategory: str | None = None,
+        entity: str | None = None,
+        extension: str | None = None,
+        media_type: str | None = None,
+        tags: list[str] | None = None,
+        deprecated: bool | None = None,
+    ) -> GroupedSearchResponse:
+        """
+        List files grouped by a field with counts.
+
+        Args:
+            group_by: Field to group by (bucket, category, subcategory, entity,
+                extension, media_type, deprecated).
+            bucket: Filter by bucket.
+            category: Filter by category.
+            subcategory: Filter by subcategory.
+            entity: Filter by entity.
+            extension: Filter by file extension.
+            media_type: Filter by media type.
+            tags: Filter by tags.
+            deprecated: Filter by deprecated status.
+
+        Returns:
+            GroupedSearchResponse with groups and total count.
+        """
+        params: dict[str, Any] = {"group_by": group_by}
+        if bucket:
+            params["bucket"] = bucket
+        if category:
+            params["category"] = category
+        if subcategory:
+            params["subcategory"] = subcategory
+        if entity:
+            params["entity"] = entity
+        if extension:
+            params["extension"] = extension
+        if media_type:
+            params["media_type"] = media_type
+        if tags:
+            params["tags"] = ",".join(tags)
+        if deprecated is not None:
+            params["deprecated"] = "true" if deprecated else "false"
+
+        response = self._client.get("/files", params=params)
+        data = self._handle_response(response)
+        return GroupedSearchResponse.model_validate(data)
 
     def create(self, data: FileCreateRequest) -> FileRecord:
         """
@@ -370,6 +435,10 @@ class R2IndexClient:
         remote_path: str | None = None,
         remote_filename: str | None = None,
         remote_version: str | None = None,
+        category: str | None = None,
+        subcategory: str | None = None,
+        entity: str | None = None,
+        tags: list[str] | None = None,
         limit: int | None = None,
     ) -> TimeseriesResponse:
         """
@@ -383,14 +452,18 @@ class R2IndexClient:
             remote_path: Filter by remote path.
             remote_filename: Filter by remote filename.
             remote_version: Filter by remote version.
+            category: Filter by file category.
+            subcategory: Filter by file subcategory.
+            entity: Filter by file entity.
+            tags: Filter by file tags (all must match).
             limit: Maximum number of files per bucket.
 
         Returns:
             TimeseriesResponse with buckets.
         """
         params: dict[str, Any] = {
-            "start": str(int(start.timestamp())),
-            "end": str(int(end.timestamp())),
+            "start": str(int(start.timestamp() * 1000)),
+            "end": str(int(end.timestamp() * 1000)),
             "scale": scale,
         }
         if bucket:
@@ -401,6 +474,14 @@ class R2IndexClient:
             params["remote_filename"] = remote_filename
         if remote_version:
             params["remote_version"] = remote_version
+        if category:
+            params["category"] = category
+        if subcategory:
+            params["subcategory"] = subcategory
+        if entity:
+            params["entity"] = entity
+        if tags:
+            params["tags"] = ",".join(tags)
         if limit:
             params["limit"] = str(limit)
 
@@ -416,6 +497,10 @@ class R2IndexClient:
         remote_path: str | None = None,
         remote_filename: str | None = None,
         remote_version: str | None = None,
+        category: str | None = None,
+        subcategory: str | None = None,
+        entity: str | None = None,
+        tags: list[str] | None = None,
     ) -> SummaryResponse:
         """
         Get download summary analytics.
@@ -427,13 +512,17 @@ class R2IndexClient:
             remote_path: Filter by remote path.
             remote_filename: Filter by remote filename.
             remote_version: Filter by remote version.
+            category: Filter by file category.
+            subcategory: Filter by file subcategory.
+            entity: Filter by file entity.
+            tags: Filter by file tags (all must match).
 
         Returns:
             SummaryResponse with aggregated statistics.
         """
         params: dict[str, Any] = {
-            "start": str(int(start.timestamp())),
-            "end": str(int(end.timestamp())),
+            "start": str(int(start.timestamp() * 1000)),
+            "end": str(int(end.timestamp() * 1000)),
         }
         if bucket:
             params["bucket"] = bucket
@@ -443,6 +532,14 @@ class R2IndexClient:
             params["remote_filename"] = remote_filename
         if remote_version:
             params["remote_version"] = remote_version
+        if category:
+            params["category"] = category
+        if subcategory:
+            params["subcategory"] = subcategory
+        if entity:
+            params["entity"] = entity
+        if tags:
+            params["tags"] = ",".join(tags)
 
         response = self._client.get("/analytics/summary", params=params)
         data = self._handle_response(response)
@@ -471,8 +568,8 @@ class R2IndexClient:
         """
         params: dict[str, Any] = {
             "ip": ip_address,
-            "start": str(int(start.timestamp())),
-            "end": str(int(end.timestamp())),
+            "start": str(int(start.timestamp() * 1000)),
+            "end": str(int(end.timestamp() * 1000)),
         }
         if limit:
             params["limit"] = str(limit)
@@ -491,6 +588,10 @@ class R2IndexClient:
         remote_path: str | None = None,
         remote_filename: str | None = None,
         remote_version: str | None = None,
+        category: str | None = None,
+        subcategory: str | None = None,
+        entity: str | None = None,
+        tags: list[str] | None = None,
         limit: int | None = None,
     ) -> UserAgentsResponse:
         """
@@ -503,14 +604,18 @@ class R2IndexClient:
             remote_path: Filter by remote path.
             remote_filename: Filter by remote filename.
             remote_version: Filter by remote version.
+            category: Filter by file category.
+            subcategory: Filter by file subcategory.
+            entity: Filter by file entity.
+            tags: Filter by file tags (all must match).
             limit: Maximum number of results.
 
         Returns:
             UserAgentsResponse with user agent stats.
         """
         params: dict[str, Any] = {
-            "start": str(int(start.timestamp())),
-            "end": str(int(end.timestamp())),
+            "start": str(int(start.timestamp() * 1000)),
+            "end": str(int(end.timestamp() * 1000)),
         }
         if bucket:
             params["bucket"] = bucket
@@ -520,12 +625,119 @@ class R2IndexClient:
             params["remote_filename"] = remote_filename
         if remote_version:
             params["remote_version"] = remote_version
+        if category:
+            params["category"] = category
+        if subcategory:
+            params["subcategory"] = subcategory
+        if entity:
+            params["entity"] = entity
+        if tags:
+            params["tags"] = ",".join(tags)
         if limit:
             params["limit"] = str(limit)
 
         response = self._client.get("/analytics/user-agents", params=params)
         data = self._handle_response(response)
         return UserAgentsResponse.model_validate(data)
+
+    def get_top_files(
+        self,
+        start: datetime,
+        end: datetime,
+        sort_by: str = "downloads",
+        bucket: str | None = None,
+        remote_path: str | None = None,
+        remote_filename: str | None = None,
+        remote_version: str | None = None,
+        category: str | None = None,
+        subcategory: str | None = None,
+        entity: str | None = None,
+        tags: list[str] | None = None,
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> TopFilesResponse:
+        """
+        Get top files by download count.
+
+        Args:
+            start: Start datetime.
+            end: End datetime.
+            sort_by: Sort by 'downloads' or 'unique_downloads'.
+            bucket: Filter by bucket.
+            remote_path: Filter by remote path.
+            remote_filename: Filter by remote filename.
+            remote_version: Filter by remote version.
+            category: Filter by file category.
+            subcategory: Filter by file subcategory.
+            entity: Filter by file entity.
+            tags: Filter by file tags (all must match).
+            limit: Maximum number of results.
+            offset: Number of results to skip.
+
+        Returns:
+            TopFilesResponse with ranked files and total count.
+        """
+        params: dict[str, Any] = {
+            "start": str(int(start.timestamp() * 1000)),
+            "end": str(int(end.timestamp() * 1000)),
+            "sort_by": sort_by,
+        }
+        if bucket:
+            params["bucket"] = bucket
+        if remote_path:
+            params["remote_path"] = remote_path
+        if remote_filename:
+            params["remote_filename"] = remote_filename
+        if remote_version:
+            params["remote_version"] = remote_version
+        if category:
+            params["category"] = category
+        if subcategory:
+            params["subcategory"] = subcategory
+        if entity:
+            params["entity"] = entity
+        if tags:
+            params["tags"] = ",".join(tags)
+        if limit:
+            params["limit"] = str(limit)
+        if offset:
+            params["offset"] = str(offset)
+
+        response = self._client.get("/analytics/top-files", params=params)
+        data = self._handle_response(response)
+        return TopFilesResponse.model_validate(data)
+
+    def get_file_download_counts(
+        self,
+        file_id: str,
+        start: datetime,
+        end: datetime,
+        scale: str = "day",
+    ) -> FileDownloadCountResponse:
+        """
+        Get download counts for a single file over time.
+
+        Args:
+            file_id: The file ID.
+            start: Start datetime.
+            end: End datetime.
+            scale: Time scale (hour, day, month).
+
+        Returns:
+            FileDownloadCountResponse with time buckets.
+
+        Raises:
+            NotFoundError: If the file is not found.
+        """
+        params: dict[str, Any] = {
+            "start": str(int(start.timestamp() * 1000)),
+            "end": str(int(end.timestamp() * 1000)),
+            "scale": scale,
+        }
+
+        response = self._client.get(f"/analytics/file/{file_id}/downloads", params=params)
+        data = self._handle_response(response)
+        return FileDownloadCountResponse.model_validate(data)
 
     # Maintenance
 
