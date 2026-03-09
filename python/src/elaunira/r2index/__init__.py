@@ -36,6 +36,7 @@ from .models import (
     FileUpdateRequest,
     HealthResponse,
     IndexEntry,
+    IndexResponse,
     RemoteTuple,
     SummaryResponse,
     TimeseriesBucket,
@@ -76,6 +77,7 @@ __all__ = [
     "FileRecord",
     "FileUpdateRequest",
     "IndexEntry",
+    "IndexResponse",
     "RemoteTuple",
     # Models - Downloads
     "DownloadRecord",

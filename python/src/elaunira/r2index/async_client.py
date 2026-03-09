@@ -31,6 +31,7 @@ from .models import (
     FileRecord,
     FileUpdateRequest,
     HealthResponse,
+    IndexResponse,
     RemoteTuple,
     SummaryResponse,
     TimeseriesResponse,
@@ -301,7 +302,9 @@ class AsyncR2IndexClient:
         subcategory: str | None = None,
         entity: str | None = None,
         tags: list[str] | None = None,
-    ) -> dict[str, Any]:
+        limit: int | None = None,
+        offset: int | None = None,
+    ) -> IndexResponse:
         """
         Get file index (nested structure grouped by entity then extension).
 
@@ -311,9 +314,11 @@ class AsyncR2IndexClient:
             subcategory: Filter by subcategory.
             entity: Filter by entity.
             tags: Filter by tags.
+            limit: Maximum number of results (default 100, max 1000).
+            offset: Number of results to skip (starts at 0).
 
         Returns:
-            Nested dictionary structure.
+            IndexResponse with nested index and total count.
         """
         params: dict[str, Any] = {}
         if bucket:
@@ -326,10 +331,14 @@ class AsyncR2IndexClient:
             params["entity"] = entity
         if tags:
             params["tags"] = ",".join(tags)
+        if limit:
+            params["limit"] = str(limit)
+        if offset:
+            params["offset"] = str(offset)
 
         response = await self._client.get("/files/index", params=params)
-        data: dict[str, Any] = self._handle_response(response)
-        return data
+        data = self._handle_response(response)
+        return IndexResponse.model_validate(data)
 
     # Download Tracking
 

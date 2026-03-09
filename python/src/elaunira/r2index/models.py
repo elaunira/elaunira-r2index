@@ -102,10 +102,33 @@ class FileListResponse(BaseModel):
 class IndexEntry(BaseModel):
     """Single entry in the index response."""
 
+    id: str
+    bucket: str
+    category: str
+    subcategory: str | None = None
+    entity: str
+    extension: str
+    name: str | None = None
+    media_type: str
     checksums: dict[str, str | None]
     file_size: str | None = None
+    remote_path: str
+    remote_filename: str
+    remote_version: str | None = None
+    metadata_path: str | None = None
+    deprecated: bool = False
+    deprecation_reason: str | None = None
+    tags: list[str] = Field(default_factory=list)
+    extra: dict[str, Any] | None = None
+    created: str | None = None
     last_updated: str | None = None
-    name: str | None = None
+
+
+class IndexResponse(BaseModel):
+    """Response for the nested index endpoint."""
+
+    index: dict[str, dict[str, IndexEntry]]
+    total: int
 
 
 class DownloadRecordRequest(BaseModel):
