@@ -83,7 +83,8 @@ export const searchParamsSchema = z.object({
   entity: z.string().max(100).optional(),
   extension: z.string().max(50).optional(),
   group_by: z.enum(['bucket', 'category', 'subcategory', 'entity', 'extension', 'media_type', 'deprecated']).optional(),
-  limit: z.string().regex(/^\d+$/).optional(),
+  latest: z.boolean().optional(),
+  limit: z.string().regex(/^(-1|\d+)$/).optional(),
   media_type: z.string().max(100).optional(),
   offset: z.string().regex(/^\d+$/).optional(),
   tags: z.string().max(500).optional(),
@@ -123,7 +124,7 @@ export const analyticsParamsSchema = z.object({
   entity: z.string().max(100).optional(),
   tags: z.string().max(500).optional(),
   ip: z.string().max(45).optional(),
-  limit: z.string().regex(/^\d+$/).optional(),
+  limit: z.string().regex(/^(-1|\d+)$/).optional(),
   offset: z.string().regex(/^\d+$/).optional(),
 }).refine(data => parseInt(data.start, 10) <= parseInt(data.end, 10), {
   message: 'start must be less than or equal to end',

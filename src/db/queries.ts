@@ -19,11 +19,18 @@ interface QueryConditions {
 // Helpers
 // ============================================================================
 
+export function parseLimit(value: string | undefined, defaultLimit: number, maxLimit: number): number {
+  const parsed = parseInt(value ?? String(defaultLimit), 10);
+  if (parsed === -1) return -1;
+  return Math.min(parsed, maxLimit);
+}
+
 function parseRecord(file: FileRecordRaw): FileRecord {
+  const { rn: _, ...rest } = file as FileRecordRaw & { rn?: number };
   return {
-    ...file,
-    extra: file.extra ? JSON.parse(file.extra) : null,
-    deprecated: file.deprecated === 1,
+    ...rest,
+    extra: rest.extra ? JSON.parse(rest.extra) : null,
+    deprecated: rest.deprecated === 1,
   };
 }
 
@@ -366,31 +373,51 @@ async function searchFilesGrouped(db: D1Database, params: SearchParams): Promise
 async function searchFilesList(db: D1Database, params: SearchParams): Promise<SearchResult> {
   const { values, whereClause } = buildSearchConditions(params);
 
-  const countResult = await db.prepare(`SELECT COUNT(f.id) as total FROM files f${whereClause}`).bind(...values).first<{ total: number }>();
-  const total = countResult?.total ?? 0;
-
-  const limit = Math.min(parseInt(params.limit ?? '100', 10), 1000);
+  const limit = parseLimit(params.limit, 100, 1000);
   const offset = parseInt(params.offset ?? '0', 10);
 
-  const query = `SELECT f.* FROM files f${whereClause} ORDER BY f.created DESC LIMIT ? OFFSET ?`;
+  let countQuery: string;
+  let query: string;
+
+  if (params.latest) {
+    countQuery = `SELECT COUNT(*) as total FROM (SELECT ROW_NUMBER() OVER (PARTITION BY f.bucket, f.remote_path, f.remote_filename ORDER BY f.updated DESC) as rn FROM files f${whereClause}) WHERE rn = 1`;
+    query = `SELECT * FROM (SELECT f.*, ROW_NUMBER() OVER (PARTITION BY f.bucket, f.remote_path, f.remote_filename ORDER BY f.updated DESC) as rn FROM files f${whereClause}) WHERE rn = 1 ORDER BY created DESC LIMIT ? OFFSET ?`;
+  } else {
+    countQuery = `SELECT COUNT(f.id) as total FROM files f${whereClause}`;
+    query = `SELECT f.* FROM files f${whereClause} ORDER BY f.created DESC LIMIT ? OFFSET ?`;
+  }
+
+  const countResult = await db.prepare(countQuery).bind(...values).first<{ total: number }>();
+  const total = countResult?.total ?? 0;
+
   const result = await db.prepare(query).bind(...values, limit, offset).all<FileRecordRaw>();
   const files = result.results.map(parseRecord);
 
   await fetchTagsForFiles(db, files);
 
-  return { files, total };
+  return { files, has_more: offset + files.length < total, total };
 }
 
 export async function getNestedIndex(db: D1Database, params: SearchParams): Promise<NestedIndexResult> {
   const { values, whereClause } = buildSearchConditions(params);
 
-  const countResult = await db.prepare(`SELECT COUNT(f.id) as total FROM files f${whereClause}`).bind(...values).first<{ total: number }>();
-  const total = countResult?.total ?? 0;
-
-  const limit = Math.min(parseInt(params.limit ?? '100', 10), 1000);
+  const limit = parseLimit(params.limit, 100, 1000);
   const offset = parseInt(params.offset ?? '0', 10);
 
-  const query = `SELECT f.* FROM files f${whereClause} ORDER BY f.entity, f.extension LIMIT ? OFFSET ?`;
+  let countQuery: string;
+  let query: string;
+
+  if (params.latest) {
+    countQuery = `SELECT COUNT(*) as total FROM (SELECT ROW_NUMBER() OVER (PARTITION BY f.bucket, f.remote_path, f.remote_filename ORDER BY f.updated DESC) as rn FROM files f${whereClause}) WHERE rn = 1`;
+    query = `SELECT * FROM (SELECT f.*, ROW_NUMBER() OVER (PARTITION BY f.bucket, f.remote_path, f.remote_filename ORDER BY f.updated DESC) as rn FROM files f${whereClause}) WHERE rn = 1 ORDER BY entity, extension LIMIT ? OFFSET ?`;
+  } else {
+    countQuery = `SELECT COUNT(f.id) as total FROM files f${whereClause}`;
+    query = `SELECT f.* FROM files f${whereClause} ORDER BY f.entity, f.extension LIMIT ? OFFSET ?`;
+  }
+
+  const countResult = await db.prepare(countQuery).bind(...values).first<{ total: number }>();
+  const total = countResult?.total ?? 0;
+
   const result = await db.prepare(query).bind(...values, limit, offset).all<FileRecordRaw>();
   const files = result.results.map(parseRecord);
 
@@ -404,5 +431,5 @@ export async function getNestedIndex(db: D1Database, params: SearchParams): Prom
     index[file.entity][file.extension] = buildFileEntry(file) as NestedIndex[string][string];
   }
 
-  return { index, total };
+  return { has_more: offset + files.length < total, index, total };
 }

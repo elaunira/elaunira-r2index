@@ -92,6 +92,7 @@ export interface SearchParams {
   entity?: string;
   extension?: string;
   group_by?: string;
+  latest?: boolean;
   limit?: string;
   media_type?: string;
   offset?: string;
@@ -105,6 +106,7 @@ export interface GroupedResult {
 
 export interface SearchResult {
   files: FileRecord[];
+  has_more: boolean;
   total: number;
 }
 
@@ -129,6 +131,7 @@ export interface FileIndexEntry {
 export type NestedIndex = Record<string, Record<string, FileIndexEntry>>;
 
 export interface NestedIndexResult {
+  has_more: boolean;
   index: NestedIndex;
   total: number;
 }

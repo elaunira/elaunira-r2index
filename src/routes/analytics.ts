@@ -1,6 +1,7 @@
 import { Context, Hono } from 'hono';
 import type { AnalyticsScale, Env, Variables } from '../types';
 import { getTimeSeries, getSummary, getDownloadsByIp, getUserAgentStats, getTopFiles, getFileDownloadCounts } from '../db/downloads';
+import { parseLimit } from '../db/queries';
 import { Errors, validationError } from '../errors';
 import { analyticsParamsSchema } from '../validation';
 
@@ -44,7 +45,7 @@ app.get('/timeseries', async (c) => {
   }
 
   const { start, end, scale, bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags, limit } = parsed.data;
-  const filesLimit = Math.min(parseInt(limit || '100', 10), 1000);
+  const filesLimit = parseLimit(limit, 100, 1000);
   const data = await getTimeSeries(
     c.get('db'),
     parseInt(start, 10),
@@ -103,7 +104,7 @@ app.get('/by-ip', async (c) => {
     ip,
     parseInt(start, 10),
     parseInt(end, 10),
-    Math.min(parseInt(limit || '100', 10), 1000),
+    parseLimit(limit, 100, 1000),
     parseInt(offset || '0', 10)
   );
 
@@ -126,7 +127,7 @@ app.get('/user-agents', async (c) => {
     parseInt(start, 10),
     parseInt(end, 10),
     { bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags },
-    Math.min(parseInt(limit || '20', 10), 100)
+    parseLimit(limit, 20, 100)
   );
 
   setCacheHeaders(c);
@@ -158,7 +159,7 @@ app.get('/top-files', async (c) => {
     parseInt(end, 10),
     { bucket, remote_path, remote_filename, remote_version, category, subcategory, entity, tags },
     sortBy,
-    Math.min(parseInt(limit || '100', 10), 1000),
+    parseLimit(limit, 100, 1000),
     parseInt(offset || '0', 10)
   );
 

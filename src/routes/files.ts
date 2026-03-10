@@ -20,6 +20,7 @@ function getSearchParams(c: Context): SearchParams {
     media_type: c.req.query('media_type'),
     tags: c.req.query('tags'),
     deprecated: c.req.query('deprecated') as 'true' | 'false' | undefined,
+    latest: c.req.query('latest') === 'true',
     limit: c.req.query('limit'),
     offset: c.req.query('offset'),
     group_by: c.req.query('group_by') as SearchParams['group_by'],
@@ -114,6 +115,7 @@ app.get('/by-tuple', async (c) => {
 app.get('/index', async (c) => {
   const params: SearchParams = {
     ...getFilterParams(c),
+    latest: true,
     limit: c.req.query('limit'),
     offset: c.req.query('offset'),
   };
