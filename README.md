@@ -31,29 +31,80 @@ The Worker handles metadata indexing, download tracking with analytics, and file
 </tr>
 </table>
 
-## Setup
+## Deploy as a Dependency
 
-### 1. Install dependencies
+The recommended way to deploy R2 Index is to install it as an npm dependency in your own project. This lets each project have its own `wrangler.jsonc` with project-specific bindings (D1 database, R2 bucket, routes, secrets).
 
-```bash
-npm install
-```
-
-### 2. Create D1 database
+### 1. Create your project
 
 ```bash
-wrangler d1 create r2index
+mkdir my-r2index && cd my-r2index
+npm init -y
 ```
 
-Update `wrangler.jsonc` with the returned `database_id`.
+### 2. Configure npm for GitHub Packages
 
-### 3. Apply migrations
+Create `.npmrc`:
+
+```
+@elaunira:registry=https://npm.pkg.github.com
+```
+
+### 3. Install the package
 
 ```bash
-npm run db:migrate
+npm install @elaunira/r2index
 ```
 
-### 4. Set API tokens
+### 4. Create the entry point
+
+Create `src/index.ts`:
+
+```ts
+export { default } from '@elaunira/r2index';
+```
+
+### 5. Create your `wrangler.jsonc`
+
+Use [`wrangler.example.jsonc`](wrangler.example.jsonc) as a reference:
+
+```jsonc
+{
+  "name": "my-r2index",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-01-31",
+  "routes": [
+    { "pattern": "r2index.mydomain.com/*", "zone_name": "mydomain.com" }
+  ],
+  "d1_databases": [
+    {
+      "binding": "D1",
+      "database_name": "my-r2index",
+      "database_id": "<YOUR_D1_DATABASE_ID>"
+    }
+  ],
+  "r2_buckets": [
+    { "binding": "R2", "bucket_name": "my-bucket" }
+  ],
+  "vars": {
+    "CACHE_MAX_AGE": "60",
+    "DOWNLOADS_RETENTION_DAYS": "365"
+  }
+}
+```
+
+### 6. Create D1 database and apply migrations
+
+```bash
+wrangler d1 create my-r2index
+# Update wrangler.jsonc with the returned database_id
+
+# Apply migrations from the package
+wrangler d1 migrations apply my-r2index --remote \
+  --migrations-dir node_modules/@elaunira/r2index/migrations
+```
+
+### 7. Set API tokens
 
 ```bash
 # Required: token for write operations (create, update, delete)
@@ -63,15 +114,31 @@ wrangler secret put R2INDEX_WRITE_TOKEN
 wrangler secret put R2INDEX_READ_TOKEN
 ```
 
-### 5. Deploy
+### 8. Deploy
 
 ```bash
+wrangler deploy
+```
+
+## Standalone Setup
+
+If you prefer to clone and deploy directly:
+
+```bash
+git clone https://github.com/elaunira/elaunira-r2index.git
+cd elaunira-r2index
+npm install
+cp wrangler.example.jsonc wrangler.jsonc
+# Edit wrangler.jsonc with your D1 database ID, R2 bucket, and routes
+wrangler d1 create r2index
+npm run db:migrate
+wrangler secret put R2INDEX_WRITE_TOKEN
 npm run deploy
 ```
 
 ## Configuration
 
-See [`wrangler.jsonc`](wrangler.jsonc) for the full configuration.
+See [`wrangler.example.jsonc`](wrangler.example.jsonc) for the full configuration.
 
 ### Environment Variables
 
@@ -830,7 +897,7 @@ curl -X POST "https://r2index.acme.com/maintenance/cleanup-downloads" \
 
 **Cloudflare Cron Trigger Example:**
 
-Add to `wrangler.jsonc`:
+Add to your `wrangler.jsonc`:
 
 ```jsonc
 {
@@ -917,6 +984,9 @@ export default {
 ## Development
 
 ```bash
+# Copy the example config for local development
+cp wrangler.example.jsonc wrangler.jsonc
+
 # Run locally
 npm run dev
 
