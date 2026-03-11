@@ -161,7 +161,8 @@ export async function getFileByRemote(
   bucket: string,
   remotePath: string,
   remoteFilename: string,
-  remoteVersion?: string
+  remoteVersion?: string,
+  latest?: boolean
 ): Promise<FileRecord | null> {
   let query = 'SELECT * FROM files WHERE bucket = ? AND remote_path = ? AND remote_filename = ?';
   const bindings: string[] = [bucket, remotePath, remoteFilename];
@@ -169,6 +170,8 @@ export async function getFileByRemote(
   if (remoteVersion) {
     query += ' AND remote_version = ?';
     bindings.push(remoteVersion);
+  } else if (latest) {
+    query += ' AND remote_version IS NOT NULL ORDER BY remote_version DESC LIMIT 1';
   } else {
     query += ' AND remote_version IS NULL';
   }
