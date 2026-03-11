@@ -7,6 +7,13 @@ import type { FileRecord } from '../types';
 
 const app = new Hono<{ Bindings: Env; Variables: Variables }>();
 
+/** Returns true if this is a full download or the first byte-range chunk (starts at 0). */
+function isInitialRequest(rangeHeader: string | undefined): boolean {
+  if (!rangeHeader) return true;
+  const match = rangeHeader.match(/^bytes=(\d+)-/);
+  return match !== null && match[1] === '0';
+}
+
 function buildR2Key(file: FileRecord): string {
   const parts = [file.remote_path.replace(/^\/|\/$/g, '')];
   if (file.remote_version) {
@@ -31,18 +38,20 @@ app.get('/:id', async (c) => {
     return c.json(Errors.R2_OBJECT_NOT_FOUND, 404);
   }
 
-  // Record download
-  const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-real-ip') ?? 'unknown';
-  const userAgent = c.req.header('user-agent') ?? null;
+  // Record download only for full requests or first byte-range chunk
+  if (isInitialRequest(c.req.header('range'))) {
+    const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-real-ip') ?? 'unknown';
+    const userAgent = c.req.header('user-agent') ?? null;
 
-  await createDownload(c.get('db'), {
-    bucket: file.bucket,
-    remote_path: file.remote_path,
-    remote_filename: file.remote_filename,
-    remote_version: file.remote_version ?? undefined,
-    ip_address: ip,
-    user_agent: userAgent ?? undefined,
-  });
+    await createDownload(c.get('db'), {
+      bucket: file.bucket,
+      remote_path: file.remote_path,
+      remote_filename: file.remote_filename,
+      remote_version: file.remote_version ?? undefined,
+      ip_address: ip,
+      user_agent: userAgent ?? undefined,
+    });
+  }
 
   const headers = new Headers();
   headers.set('Content-Type', file.media_type || 'application/octet-stream');
@@ -79,18 +88,20 @@ app.get('/', async (c) => {
     return c.json(Errors.R2_OBJECT_NOT_FOUND, 404);
   }
 
-  // Record download
-  const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-real-ip') ?? 'unknown';
-  const userAgent = c.req.header('user-agent') ?? null;
+  // Record download only for full requests or first byte-range chunk
+  if (isInitialRequest(c.req.header('range'))) {
+    const ip = c.req.header('cf-connecting-ip') ?? c.req.header('x-real-ip') ?? 'unknown';
+    const userAgent = c.req.header('user-agent') ?? null;
 
-  await createDownload(c.get('db'), {
-    bucket: file.bucket,
-    remote_path: file.remote_path,
-    remote_filename: file.remote_filename,
-    remote_version: file.remote_version ?? undefined,
-    ip_address: ip,
-    user_agent: userAgent ?? undefined,
-  });
+    await createDownload(c.get('db'), {
+      bucket: file.bucket,
+      remote_path: file.remote_path,
+      remote_filename: file.remote_filename,
+      remote_version: file.remote_version ?? undefined,
+      ip_address: ip,
+      user_agent: userAgent ?? undefined,
+    });
+  }
 
   const headers = new Headers();
   headers.set('Content-Type', file.media_type || 'application/octet-stream');
