@@ -1,7 +1,16 @@
 {
-  "name": "r2index",
+  "name": "@elaunira/r2index",
   "version": "1.3.1",
   "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./types": "./src/types.ts"
+  },
+  "files": [
+    "src",
+    "!src/__tests__",
+    "migrations"
+  ],
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
@@ -15,6 +24,13 @@
   "dependencies": {
     "hono": "^4.11.8",
     "zod": "^4.3.6"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/elaunira/elaunira-r2index.git"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.12.10",

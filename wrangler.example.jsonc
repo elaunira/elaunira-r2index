@@ -3,13 +3,13 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-01-31",
   "routes": [
-    { "pattern": "r2index.example.com/*", "zone_name": "example.com" }
+    { "pattern": "r2index.elaunira.com/*", "zone_name": "elaunira.com" }
   ],
   "d1_databases": [
     {
       "binding": "D1",
       "database_name": "r2index",
-      "database_id": "<YOUR_D1_DATABASE_ID>"
+      "database_id": "42e34740-d515-4c03-aa75-0afbf21d4e7a"
     }
   ],
   // Configure your R2 bucket: update bucket_name below
