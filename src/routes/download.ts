@@ -57,7 +57,7 @@ async function streamDownload(
 
   const object = await c.env.R2.get(
     r2Key,
-    rangeHeader ? { range: c.req.header('range') as any } : undefined,
+    rangeHeader ? { range: new Headers({ range: rangeHeader }) } : undefined,
   );
 
   if (!object) {
