@@ -20,7 +20,7 @@ export async function setupDatabase() {
   );
 
   for (const [, sql] of sortedEntries) {
-    const statements = parseSqlStatements(sql);
+    const statements = parseSqlStatements(sql as string);
     if (statements.length > 0) {
       await env.D1.batch(statements.map((s) => env.D1.prepare(s)));
     }

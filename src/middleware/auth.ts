@@ -2,7 +2,7 @@ import { Context, Next } from 'hono';
 import type { Env } from '../types';
 import { Errors } from '../errors';
 
-function validateToken(c: Context<{ Bindings: Env }>, expectedToken: string): ReturnType<typeof c.json> | null {
+function validateToken(c: Context<{ Bindings: Env }>, expectedToken: string): Response | null {
   const authHeader = c.req.header('Authorization');
 
   if (!authHeader) {
