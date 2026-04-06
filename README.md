@@ -84,7 +84,7 @@ Use [`wrangler.example.jsonc`](wrangler.example.jsonc) as a reference:
     }
   ],
   "r2_buckets": [
-    { "binding": "R2", "bucket_name": "my-bucket" }
+    { "binding": "MY_BUCKET", "bucket_name": "my-bucket" }
   ],
   "vars": {
     "CACHE_MAX_AGE": "60",
@@ -129,7 +129,7 @@ git clone https://github.com/elaunira/elaunira-r2index.git
 cd elaunira-r2index
 npm install
 cp wrangler.example.jsonc wrangler.jsonc
-# Edit wrangler.jsonc with your D1 database ID, R2 bucket, and routes
+# Edit wrangler.jsonc with your D1 database ID, R2 bucket(s), and routes
 wrangler d1 create r2index
 npm run db:migrate
 wrangler secret put R2INDEX_WRITE_TOKEN
@@ -154,7 +154,7 @@ See [`wrangler.example.jsonc`](wrangler.example.jsonc) for the full configuratio
 | Binding | Type | Description |
 |---------|------|-------------|
 | `D1` | D1 Database | Metadata storage |
-| `R2` | R2 Bucket | File storage (used by `/download` endpoint) |
+| `<BUCKET_BINDING>` | R2 Bucket | One or more R2 bucket bindings used by the `/download` endpoint. The binding name must be the bucket name uppercased with hyphens replaced by underscores (e.g., bucket `my-assets` requires binding `MY_ASSETS`). Configure multiple bindings to serve files from different buckets. |
 
 ### Caching
 

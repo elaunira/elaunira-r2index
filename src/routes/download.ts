@@ -48,14 +48,33 @@ function getClientUserAgent(c: { req: { header: (name: string) => string | undef
   return c.req.header('x-forwarded-user-agent') ?? c.req.header('user-agent') ?? null;
 }
 
+/** Converts a bucket name to its expected R2 binding name (e.g. "my-assets" → "MY_ASSETS"). */
+function toBindingName(bucket: string): string {
+  return bucket.replace(/-/g, '_').toUpperCase();
+}
+
+function getR2Bucket(env: Env, bucket: string): R2Bucket | null {
+  const bindingName = toBindingName(bucket);
+  const binding = env[bindingName];
+  if (binding && typeof binding === 'object' && 'get' in binding) {
+    return binding as R2Bucket;
+  }
+  return null;
+}
+
 async function streamDownload(
   c: { req: { header: (name: string) => string | undefined; method: string }; env: Env; get: (key: string) => any; json: (data: any, status: number) => Response },
   file: FileRecord,
 ): Promise<Response> {
+  const r2Bucket = getR2Bucket(c.env, file.bucket);
+  if (!r2Bucket) {
+    return c.json(Errors.R2_BUCKET_NOT_BOUND, 500);
+  }
+
   const r2Key = buildR2Key(file);
   const rangeHeader = c.req.header('range');
 
-  const object = await c.env.R2.get(
+  const object = await r2Bucket.get(
     r2Key,
     rangeHeader ? { range: new Headers({ range: rangeHeader }) } : undefined,
   );

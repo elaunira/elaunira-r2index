@@ -2,9 +2,11 @@ export interface Env {
   CACHE_MAX_AGE?: string;
   D1: D1Database;
   DOWNLOADS_RETENTION_DAYS?: string; // Days to keep download records (default: no limit)
-  R2: R2Bucket;
   R2INDEX_READ_TOKEN?: string; // Optional: if empty or unset, read operations are public
   R2INDEX_WRITE_TOKEN: string;
+  // R2 bucket bindings are resolved dynamically: a bucket name like "my-assets"
+  // maps to a binding named "MY_ASSETS" (uppercased, hyphens replaced with underscores).
+  [key: string]: R2Bucket | D1Database | string | undefined;
 }
 
 export interface Variables {

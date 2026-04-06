@@ -64,6 +64,11 @@ export const Errors = {
     'The requested file was not found.',
     'Verify the file ID or remote tuple exists.'
   ),
+  R2_BUCKET_NOT_BOUND: e(
+    'R2_BUCKET_NOT_BOUND',
+    'No R2 binding found for the specified bucket.',
+    'Add an R2 bucket binding in your wrangler configuration. The binding name must be the bucket name uppercased with hyphens replaced by underscores (e.g., bucket "my-assets" requires binding "MY_ASSETS").'
+  ),
   R2_OBJECT_NOT_FOUND: e(
     'R2_OBJECT_NOT_FOUND',
     'The file object was not found in storage.',

@@ -12,10 +12,12 @@
       "database_id": "42e34740-d515-4c03-aa75-0afbf21d4e7a"
     }
   ],
-  // Configure your R2 bucket: update bucket_name below
+  // Configure your R2 buckets: the binding name must be the bucket name uppercased
+  // with hyphens replaced by underscores (e.g., bucket "my-assets" → binding "MY_ASSETS").
+  // This must match the bucket name stored in file records.
   "r2_buckets": [
     {
-      "binding": "R2",
+      "binding": "R2INDEX_E2E_TESTS",
       "bucket_name": "r2index-e2e-tests"
     }
   ],
