@@ -83,6 +83,7 @@ Use [`wrangler.example.jsonc`](wrangler.example.jsonc) as a reference:
       "database_id": "<YOUR_D1_DATABASE_ID>"
     }
   ],
+  // R2 bucket bindings: binding name = bucket name uppercased, hyphens → underscores
   "r2_buckets": [
     { "binding": "MY_BUCKET", "bucket_name": "my-bucket" }
   ],
