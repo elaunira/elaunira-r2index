@@ -34,6 +34,9 @@
   },
   // R2INDEX_WRITE_TOKEN (required): wrangler secret put R2INDEX_WRITE_TOKEN
   // R2INDEX_READ_TOKEN (optional, if unset read operations are public): wrangler secret put R2INDEX_READ_TOKEN
+  "secrets": {
+    "required": ["R2INDEX_WRITE_TOKEN"]
+  },
   "vars": {
     "CACHE_MAX_AGE": "60",
     "DOWNLOADS_RETENTION_DAYS": "365"
