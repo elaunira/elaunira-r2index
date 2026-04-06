@@ -9,7 +9,8 @@
     {
       "binding": "D1",
       "database_name": "r2index",
-      "database_id": "42e34740-d515-4c03-aa75-0afbf21d4e7a"
+      "database_id": "42e34740-d515-4c03-aa75-0afbf21d4e7a",
+      "migrations_dir": "node_modules/@elaunira/r2index/migrations"
     }
   ],
   // Configure your R2 buckets: the binding name must be the bucket name uppercased

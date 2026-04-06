@@ -80,7 +80,8 @@ Use [`wrangler.example.jsonc`](wrangler.example.jsonc) as a reference:
     {
       "binding": "D1",
       "database_name": "my-r2index",
-      "database_id": "<YOUR_D1_DATABASE_ID>"
+      "database_id": "<YOUR_D1_DATABASE_ID>",
+      "migrations_dir": "node_modules/@elaunira/r2index/migrations"
     }
   ],
   // R2 bucket bindings: binding name = bucket name uppercased, hyphens → underscores
@@ -100,9 +101,8 @@ Use [`wrangler.example.jsonc`](wrangler.example.jsonc) as a reference:
 wrangler d1 create my-r2index
 # Update wrangler.jsonc with the returned database_id
 
-# Apply migrations from the package
-wrangler d1 migrations apply my-r2index --remote \
-  --migrations-dir node_modules/@elaunira/r2index/migrations
+# Apply migrations (uses migrations_dir from wrangler.jsonc)
+wrangler d1 migrations apply my-r2index --remote
 ```
 
 ### 7. Set API tokens
