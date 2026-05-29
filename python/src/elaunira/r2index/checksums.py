@@ -4,7 +4,6 @@ import hashlib
 import logging
 import threading
 import time
-from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from queue import Queue
@@ -120,7 +119,7 @@ def _compute_from_file_object(
 
     Returns the total number of bytes read.
     """
-    hashers: Sequence["hashlib._Hash"] = (md5_hash, sha1_hash, sha256_hash, sha512_hash)
+    hashers = (md5_hash, sha1_hash, sha256_hash, sha512_hash)
     queues: list[Queue] = [Queue(maxsize=_QUEUE_DEPTH) for _ in hashers]
     errors: list[BaseException] = []
     errors_lock = threading.Lock()
