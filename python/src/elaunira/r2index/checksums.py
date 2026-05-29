@@ -120,11 +120,11 @@ def _compute_from_file_object(
     Returns the total number of bytes read.
     """
     hashers = (md5_hash, sha1_hash, sha256_hash, sha512_hash)
-    queues: list[Queue] = [Queue(maxsize=_QUEUE_DEPTH) for _ in hashers]
+    queues: list[Queue[bytes | None]] = [Queue(maxsize=_QUEUE_DEPTH) for _ in hashers]
     errors: list[BaseException] = []
     errors_lock = threading.Lock()
 
-    def worker(hasher: "hashlib._Hash", q: Queue) -> None:
+    def worker(hasher: "hashlib._Hash", q: Queue[bytes | None]) -> None:
         try:
             while True:
                 chunk = q.get()
