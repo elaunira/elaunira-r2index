@@ -1,5 +1,6 @@
 """Asynchronous R2Index API client."""
 
+import asyncio
 import contextlib
 import logging
 from collections.abc import Callable
@@ -842,28 +843,51 @@ class AsyncR2IndexClient:
             kind = filetype.guess(source_path)
             media_type = kind.mime if kind is not None else "application/octet-stream"
 
-        # Step 1: Compute checksums
-        checksums = await compute_checksums_async(source_path)
-
-        # Step 2: Build R2 object key
+        # Step 1: Build R2 object key
         parts = [destination_path.strip('/')]
         if destination_version:
             parts.append(destination_version)
         parts.append(destination_filename)
         object_key = "/".join(parts)
 
-        # Step 3: Upload to R2
-        await storage.upload_file(
-            source_path,
-            bucket,
-            object_key,
-            content_type=content_type,
-            progress_callback=progress_callback,
-            transfer_config=transfer_config,
-            progress_interval=progress_interval,
+        # Step 2: Compute checksums and upload concurrently.
+        # Hashing reads the file on a worker thread; the upload reads it from
+        # boto3's multipart transfer manager. Disk handles both reads in
+        # parallel; wall-clock collapses from `hash + upload` to
+        # `max(hash, upload)`.
+        #
+        # If either side fails we tear down the other to avoid leaving R2 in
+        # an inconsistent state:
+        #   - upload still in flight when hash fails → cancel the upload task;
+        #     aioboto3 aborts the in-progress multipart on cancellation.
+        #   - upload already completed when hash fails → delete the object,
+        #     since FileCreateRequest won't run and the manifest would not
+        #     reference it anyway.
+        hash_task = asyncio.create_task(compute_checksums_async(source_path))
+        upload_task = asyncio.create_task(
+            storage.upload_file(
+                source_path,
+                bucket,
+                object_key,
+                content_type=content_type,
+                progress_callback=progress_callback,
+                transfer_config=transfer_config,
+                progress_interval=progress_interval,
+            )
         )
+        try:
+            checksums, _ = await asyncio.gather(hash_task, upload_task)
+        except BaseException:
+            await self._cleanup_failed_concurrent_upload(
+                storage=storage,
+                bucket=bucket,
+                object_key=object_key,
+                hash_task=hash_task,
+                upload_task=upload_task,
+            )
+            raise
 
-        # Step 4: Upload checksum files if requested
+        # Step 3: Upload checksum files if requested
         if create_checksum_files:
             checksum_files = [
                 ("md5", checksums.md5),
@@ -880,7 +904,7 @@ class AsyncR2IndexClient:
                     content_type="text/plain",
                 )
 
-        # Step 5: Register with API
+        # Step 4: Register with API
         create_request = FileCreateRequest(
             bucket=bucket,
             category=category,
@@ -909,6 +933,52 @@ class AsyncR2IndexClient:
             bucket, destination_path, destination_filename, destination_version,
         )
         return result
+
+    @staticmethod
+    async def _cleanup_failed_concurrent_upload(
+        *,
+        storage: AsyncR2Storage,
+        bucket: str,
+        object_key: str,
+        hash_task: "asyncio.Task[Any]",
+        upload_task: "asyncio.Task[Any]",
+    ) -> None:
+        """Tear down a concurrent hash+upload pair after one side raised.
+
+        - If the upload is still running, cancel it so aioboto3 aborts the
+          in-progress multipart and no half-uploaded object lingers.
+        - If the upload already completed successfully (i.e. hashing was the
+          side that failed), delete the orphan object from R2 so it does not
+          stay behind unreferenced by the manifest.
+        - The hash task is also cancelled for hygiene; the underlying thread
+          cannot actually be stopped (``asyncio.to_thread`` is uncancellable),
+          but the future is marked done.
+
+        All cleanup errors are swallowed (and logged) so the original
+        exception propagates from the caller's ``raise``.
+        """
+        if not upload_task.done():
+            upload_task.cancel()
+            with contextlib.suppress(BaseException):
+                await upload_task
+        elif not upload_task.cancelled() and upload_task.exception() is None:
+            try:
+                await storage.delete_object(bucket, object_key)
+                logger.info(
+                    "Deleted orphan R2 object after upload-side failure: bucket=%s key=%s",
+                    bucket, object_key,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to delete orphan R2 object after upload-side failure: "
+                    "bucket=%s key=%s",
+                    bucket, object_key,
+                )
+
+        if not hash_task.done():
+            hash_task.cancel()
+            with contextlib.suppress(BaseException):
+                await hash_task
 
     async def _get_public_ip(self) -> str:
         """Fetch public IP address from checkip.amazonaws.com."""

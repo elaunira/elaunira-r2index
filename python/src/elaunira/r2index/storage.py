@@ -14,15 +14,30 @@ from .exceptions import DownloadError, UploadError
 
 logger = logging.getLogger(__name__)
 
-# Default thresholds and part sizes for multipart transfers
-DEFAULT_MULTIPART_CHUNKSIZE = 100 * 1024 * 1024  # 100MB
-DEFAULT_MULTIPART_THRESHOLD = 100 * 1024 * 1024  # 100MB
+# Default thresholds and part sizes for multipart transfers.
+#
+# Targets are tuned for multi-Gbps links (8 Gbps reference): per-connection R2
+# throughput typically lands in the 50–150 MB/s range, so saturating 1 GB/s
+# (8 Gbps) requires on the order of 8–20 concurrent streams. Default
+# concurrency therefore floors at 16 (and scales with CPU). Chunks of 32 MB
+# strike a balance between part count (3 200 parts for a 100 GB object — well
+# under S3's 10 000-part ceiling) and per-part HTTP overhead, while exposing
+# enough work to keep the concurrency wheel turning during the long tail of an
+# upload. Both knobs can still be overridden per call via R2TransferConfig.
+DEFAULT_MULTIPART_CHUNKSIZE = 32 * 1024 * 1024  # 32MB
+DEFAULT_MULTIPART_THRESHOLD = 32 * 1024 * 1024  # 32MB
+DEFAULT_MIN_CONCURRENCY = 16
 
 
 def _default_max_concurrency() -> int:
-    """Return default max concurrency: 2x CPU cores, minimum 4."""
+    """Return default max concurrency: 2x CPU cores, minimum 16.
+
+    Sized so a single worker can fill a multi-Gbps link without manual
+    tuning. On low-CPU workers the floor kicks in; on fat machines the
+    2x-CPU scaling dominates.
+    """
     cpu_count = os.cpu_count() or 2
-    return max(4, cpu_count * 2)
+    return max(DEFAULT_MIN_CONCURRENCY, cpu_count * 2)
 
 
 @dataclass
@@ -30,13 +45,19 @@ class R2TransferConfig:
     """Configuration for R2 transfer operations (uploads/downloads)."""
 
     multipart_threshold: int = DEFAULT_MULTIPART_THRESHOLD
-    """Size threshold (bytes) to trigger multipart transfer. Default 100MB."""
+    """Size threshold (bytes) to trigger multipart transfer. Default 32MB."""
 
     multipart_chunksize: int = DEFAULT_MULTIPART_CHUNKSIZE
-    """Size of each part (bytes) in multipart transfer. Default 100MB."""
+    """Size of each part (bytes) in multipart transfer. Default 32MB."""
 
     max_concurrency: int = field(default_factory=_default_max_concurrency)
-    """Number of parallel threads for multipart transfer. Default 2x CPU cores."""
+    """Number of parallel threads for multipart transfer.
+
+    Default ``max(16, 2 * CPU cores)``. The 16-stream floor is calibrated to
+    saturate an 8 Gbps link (≈1 GB/s) against R2's typical per-connection
+    throughput; the ``max_pool_connections`` of the underlying HTTP client is
+    sized to match so the pool never becomes a hidden cap.
+    """
 
     use_threads: bool = True
     """Whether to use threads for parallel transfer. Default True."""

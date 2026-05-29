@@ -2,9 +2,12 @@
 
 import hashlib
 import logging
+import threading
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from queue import Queue
 from typing import BinaryIO
 
 from .storage import _format_bytes
@@ -13,6 +16,11 @@ logger = logging.getLogger(__name__)
 
 # 8MB chunk size for memory-efficient processing of large files
 CHUNK_SIZE = 8 * 1024 * 1024
+
+# Max chunks buffered per hasher queue. Bounded to provide backpressure: the
+# reader blocks once the slowest hasher falls this far behind, capping memory
+# at ~CHUNK_SIZE * QUEUE_DEPTH * len(hashers).
+_QUEUE_DEPTH = 4
 
 
 @dataclass
@@ -104,33 +112,81 @@ def _compute_from_file_object(
     """
     Internal helper to compute checksums from a file object.
 
+    Reads the file once on the calling thread and fans each chunk out to a
+    dedicated worker thread per hash algorithm. hashlib releases the GIL
+    inside ``update()``, so the four hashers run truly in parallel on
+    multi-core CPUs and the overall throughput is bound by the slowest
+    hasher (typically MD5) instead of their sum.
+
     Returns the total number of bytes read.
     """
+    hashers: Sequence["hashlib._Hash"] = (md5_hash, sha1_hash, sha256_hash, sha512_hash)
+    queues: list[Queue] = [Queue(maxsize=_QUEUE_DEPTH) for _ in hashers]
+    errors: list[BaseException] = []
+    errors_lock = threading.Lock()
+
+    def worker(hasher: "hashlib._Hash", q: Queue) -> None:
+        try:
+            while True:
+                chunk = q.get()
+                if chunk is None:
+                    return
+                hasher.update(chunk)
+        except BaseException as exc:  # pragma: no cover - defensive
+            with errors_lock:
+                errors.append(exc)
+            # Drain remaining items so the reader doesn't deadlock on a full queue.
+            while True:
+                item = q.get()
+                if item is None:
+                    return
+
+    threads = [
+        threading.Thread(target=worker, args=(h, q), daemon=True, name=f"hasher-{h.name}")
+        for h, q in zip(hashers, queues, strict=True)
+    ]
+    started: list[threading.Thread] = []
+
     size = 0
     last_log = time.monotonic()
     start = time.monotonic()
 
-    while True:
-        chunk = file_obj.read(CHUNK_SIZE)
-        if not chunk:
-            break
+    try:
+        for t in threads:
+            t.start()
+            started.append(t)
 
-        size += len(chunk)
-        md5_hash.update(chunk)
-        sha1_hash.update(chunk)
-        sha256_hash.update(chunk)
-        sha512_hash.update(chunk)
+        while True:
+            chunk = file_obj.read(CHUNK_SIZE)
+            if not chunk:
+                break
 
-        now = time.monotonic()
-        if total_size and now - last_log >= 10.0:
-            pct = size / total_size * 100
-            elapsed = now - start
-            speed = size / elapsed if elapsed > 0 else 0
-            logger.info(
-                "Checksumming: %s / %s (%.1f%%) — %s/s",
-                _format_bytes(size), _format_bytes(total_size), pct, _format_bytes(speed),
-            )
-            last_log = now
+            size += len(chunk)
+            for q in queues:
+                q.put(chunk)
+
+            now = time.monotonic()
+            if total_size and now - last_log >= 10.0:
+                pct = size / total_size * 100
+                elapsed = now - start
+                speed = size / elapsed if elapsed > 0 else 0
+                logger.info(
+                    "Checksumming: %s / %s (%.1f%%) — %s/s",
+                    _format_bytes(size), _format_bytes(total_size), pct, _format_bytes(speed),
+                )
+                last_log = now
+    finally:
+        # Signal each *started* worker to exit. Workers that never started
+        # don't own a queue consumer, so sending None to their queue would
+        # leave the sentinel sitting there but is harmless.
+        for t, q in zip(threads, queues, strict=True):
+            if t in started:
+                q.put(None)
+        for t in started:
+            t.join()
+
+    if errors:
+        raise errors[0]
 
     return size
 

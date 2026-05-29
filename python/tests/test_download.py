@@ -591,9 +591,9 @@ class TestR2TransferConfig:
     def test_default_values(self):
         """Test default transfer config values."""
         config = R2TransferConfig()
-        assert config.multipart_threshold == 100 * 1024 * 1024  # 100MB
-        assert config.multipart_chunksize == 100 * 1024 * 1024  # 100MB
-        assert config.max_concurrency >= 4  # At least 4
+        assert config.multipart_threshold == 32 * 1024 * 1024  # 32MB
+        assert config.multipart_chunksize == 32 * 1024 * 1024  # 32MB
+        assert config.max_concurrency >= 16  # Floor sized for multi-Gbps links
         assert config.use_threads is True
 
     def test_custom_values(self):

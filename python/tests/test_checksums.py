@@ -81,3 +81,30 @@ async def test_compute_checksums_async():
         assert result.size == 18
     finally:
         temp_path.unlink()
+
+
+def test_compute_checksums_multi_chunk_parallel():
+    """Hashes must match across many chunks, exercising the parallel fan-out."""
+    import hashlib
+    import os
+
+    from elaunira.r2index.checksums import CHUNK_SIZE
+
+    # Span several chunks plus a partial tail so the reader loop runs many
+    # iterations and every hasher queue gets repeatedly fed and drained.
+    payload = os.urandom(CHUNK_SIZE * 3 + 12345)
+
+    with tempfile.NamedTemporaryFile(delete=False) as f:
+        f.write(payload)
+        temp_path = Path(f.name)
+
+    try:
+        result = compute_checksums(temp_path)
+
+        assert result.size == len(payload)
+        assert result.md5 == hashlib.md5(payload).hexdigest()
+        assert result.sha1 == hashlib.sha1(payload).hexdigest()
+        assert result.sha256 == hashlib.sha256(payload).hexdigest()
+        assert result.sha512 == hashlib.sha512(payload).hexdigest()
+    finally:
+        temp_path.unlink()
