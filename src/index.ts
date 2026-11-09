@@ -35,7 +35,7 @@ app.use('*', requestIdMiddleware);
 // CORS configuration
 app.use('*', cors({
   origin: '*',
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowMethods: ['GET', 'HEAD', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowHeaders: ['Content-Type', 'Authorization', 'X-Request-ID', 'X-D1-Bookmark'],
   exposeHeaders: ['X-Request-ID', 'X-D1-Bookmark'],
   maxAge: 86400,
